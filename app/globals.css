@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;900&display=swap');
+
+:root {
+  --armory-bg:     #01080F;
+  --armory-card:   #071520;
+  --armory-border: #1A3A52;
+  --armory-blue:   #18CFFF;
+  --armory-red:    #FF5555;
+  --armory-orange: #FF9933;
+  --armory-green:  #00FF99;
+  --armory-yellow: #FFD700;
+  --armory-purple: #BB88FF;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: var(--armory-bg);
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+/* Prevent iOS bounce */
+body {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+}

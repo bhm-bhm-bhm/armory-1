@@ -1,0 +1,22 @@
+{
+  "name": "ARMORY Tactical Skincare",
+  "short_name": "ARMORY",
+  "description": "피부는 전장이다. 매일 루틴이 방어막이 된다.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#01080F",
+  "theme_color": "#01080F",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
