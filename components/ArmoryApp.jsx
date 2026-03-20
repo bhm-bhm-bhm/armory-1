@@ -89,18 +89,16 @@ function useC() {
      1. developers.kakao.com → 앱 생성 → REST API 키 복사
      2. KAKAO_REST_KEY 교체, Redirect URI 등록
    ───────────────────────────────────────────────────────────────── */
-const getOrigin = () => (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
-
 const AUTH_CONFIG = {
   google: {
     clientId: "YOUR_GOOGLE_CLIENT_ID",       // ← 교체
-    get redirectUri() { return getOrigin() + "/auth/google/callback"; },
+    redirectUri: window?.location?.origin + "/auth/google/callback",
     scope: "openid email profile",
     authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
   },
   kakao: {
     restKey: "YOUR_KAKAO_REST_API_KEY",       // ← 교체
-    get redirectUri() { return getOrigin() + "/auth/kakao/callback"; },
+    redirectUri: window?.location?.origin + "/auth/kakao/callback",
     authUrl: "https://kauth.kakao.com/oauth/authorize",
     scope: "profile_nickname profile_image account_email",
   },
@@ -131,7 +129,6 @@ function openOAuth(provider) {
   if (isDev) return null; // caller handles mock
 
   const url = `${cfg.authUrl}?${params}`;
-  if (typeof window === "undefined") return null;
   const popup = window.open(url, `${provider}_oauth`, "width=500,height=650,left=400,top=100");
   return popup;
 }
@@ -181,23 +178,20 @@ function AuthProvider({ children }) {
 
       // 실제 OAuth: popup 메시지 수신
       const handleMessage = (e) => {
-        if (typeof window === "undefined") return;
         if (e.origin !== window.location.origin) return;
         if (e.data?.type !== "OAUTH_SUCCESS") return;
         const authUser = { ...e.data.user, provider, joinedAt: new Date().toISOString() };
         saveAuth(authUser);
         setUser(authUser);
         setAuthState("idle");
-        if (typeof window !== "undefined") window.removeEventListener("message", handleMessage);
+        window.removeEventListener("message", handleMessage);
         popup?.close();
       };
-      if (typeof window !== "undefined") {
-        window.addEventListener("message", handleMessage);
-      }
+      window.addEventListener("message", handleMessage);
 
       // 타임아웃 처리
       setTimeout(() => {
-        if (typeof window !== "undefined") window.removeEventListener("message", handleMessage);
+        window.removeEventListener("message", handleMessage);
         if (!user) { setAuthState("error"); }
         popup?.close();
       }, 120_000);
@@ -2717,44 +2711,75 @@ function ProfileSVG({active}){const c=active?C.blue:C.textFaint;return(<svg widt
 
 function BottomNav({ active, onSelect }) {
   const C = useC();
-  const leftTabs  = [{id:"dashboard",label:"DASH",Icon:DashSVG},{id:"arsenal",label:"ARMS",Icon:ArsenalSVG}];
-  const rightTabs = [{id:"ranking",label:"RANK",Icon:RankSVG},{id:"profile",label:"PROFILE",Icon:ProfileSVG}];
-  const isScanActive = active==="scan";
+  // SCAN은 중앙 고정, 나머지 4탭이 양옆에 2개씩
+  const leftTabs  = [{id:"dashboard",label:"DASH",   Icon:DashSVG   },{id:"arsenal",  label:"ARMS",   Icon:ArsenalSVG}];
+  const rightTabs = [{id:"ranking",  label:"RANK",   Icon:RankSVG   },{id:"profile",  label:"PROFILE",Icon:ProfileSVG}];
 
   const NavBtn = ({id, label, Icon}) => {
     const isActive = active===id;
     return (
       <motion.button whileTap={{ scale:0.88 }} onClick={()=>{ SFX.nav(); haptic([8]); onSelect(id); }}
-        style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", padding:"8px 0 9px", background:"none", border:"none", cursor:"pointer", position:"relative" }}>
-        {isActive&&<motion.div layoutId="navline" style={{ position:"absolute", top:0, left:"15%", right:"15%", height:2, background:C.blue, boxShadow:`0 0 10px ${C.blue}` }} transition={{ type:"spring", stiffness:400, damping:34 }}/>}
+        style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", padding:"8px 0 9px",
+          background:"none", border:"none", cursor:"pointer", position:"relative" }}>
+        {isActive&&<motion.div layoutId="nl" style={{ position:"absolute", top:0, left:"15%", right:"15%", height:2, background:C.blue, boxShadow:`0 0 10px ${C.blue}` }} transition={{ type:"spring", stiffness:400, damping:34 }}/>}
         <motion.div animate={{ scale:isActive?1.1:1 }} transition={{ type:"spring", stiffness:340 }}><Icon active={isActive}/></motion.div>
         <motion.span animate={{ color:isActive?C.blue:C.textFaint }} style={{ fontFamily:C.mono, fontSize:7, letterSpacing:"0.1em", marginTop:3 }}>{label}</motion.span>
       </motion.button>
     );
   };
 
+  const isScanActive = active==="scan";
+  return (
+    <ThemeBottomNav active={active} onSelect={onSelect}/>
+  );
+}
+function ThemeBottomNav({ active, onSelect }) {
+  const { C:TC } = useTheme();
+  const leftTabs  = [{id:"dashboard",label:"DASH",   Icon:DashSVG   },{id:"arsenal",  label:"ARMS",   Icon:ArsenalSVG}];
+  const rightTabs = [{id:"ranking",  label:"RANK",   Icon:RankSVG   },{id:"profile",  label:"PROFILE",Icon:ProfileSVG}];
+  const NavBtn = ({id, label, Icon}) => {
+    const isActive = active===id;
+    return (
+      <motion.button whileTap={{ scale:0.88 }} onClick={()=>{ SFX.nav(); haptic([8]); onSelect(id); }}
+        style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", padding:"8px 0 9px",
+          background:"none", border:"none", cursor:"pointer", position:"relative" }}>
+        {isActive&&<motion.div layoutId="nl2" style={{ position:"absolute", top:0, left:"15%", right:"15%", height:2, background:C.blue, boxShadow:`0 0 10px ${C.blue}` }} transition={{ type:"spring", stiffness:400, damping:34 }}/>}
+        <motion.div animate={{ scale:isActive?1.1:1 }} transition={{ type:"spring", stiffness:340 }}><Icon active={isActive} C={TC}/></motion.div>
+        <motion.span animate={{ color:isActive?C.blue:C.textFaint }} style={{ fontFamily:C.mono, fontSize:7, letterSpacing:"0.1em", marginTop:3 }}>{label}</motion.span>
+      </motion.button>
+    );
+  };
+  const isScanActive = active==="scan";
   return (
     <motion.div animate={{ background:C.navBg, borderTopColor:C.border }}
-      style={{ flexShrink:0, position:"relative", borderTop:`1px solid ${C.border}`, backdropFilter:"blur(20px)", paddingBottom:"env(safe-area-inset-bottom,6px)", zIndex:20 }}>
-      <div style={{ position:"absolute", top:0, left:0, right:0, height:1, background:`linear-gradient(90deg,transparent,${C.blue}55,transparent)` }}/>
+      style={{ flexShrink:0, position:"relative", borderTop:`1px solid ${C.border}`,
+        backdropFilter:"blur(20px)", paddingBottom:"env(safe-area-inset-bottom,6px)", zIndex:20 }}>
+      <div style={{ position:"absolute", top:0, left:0, right:0, height:1, background:`linear-gradient(90deg,transparent,${C.blue}55,transparent)` }} />
       <div style={{ display:"flex", alignItems:"flex-end" }}>
         {leftTabs.map(t=><NavBtn key={t.id} {...t}/>)}
+
+        {/* SCAN — 중앙 돌출 버튼 */}
         <motion.button whileTap={{ scale:0.88 }} onClick={()=>{ SFX.nav(); haptic([8]); onSelect("scan"); }}
-          style={{ flex:"1.3 1 0", display:"flex", flexDirection:"column", alignItems:"center", padding:"5px 0 9px", background:"none", border:"none", cursor:"pointer", position:"relative" }}>
-          {isScanActive&&<motion.div layoutId="navline" style={{ position:"absolute", top:0, left:"15%", right:"15%", height:2, background:C.blue, boxShadow:`0 0 10px ${C.blue}` }} transition={{ type:"spring", stiffness:400, damping:34 }}/>}
+          style={{ flex:"1.3 1 0", display:"flex", flexDirection:"column", alignItems:"center",
+            padding:"5px 0 9px", background:"none", border:"none", cursor:"pointer", position:"relative" }}>
+          {isScanActive&&<motion.div layoutId="nl" style={{ position:"absolute", top:0, left:"15%", right:"15%", height:2, background:C.blue, boxShadow:`0 0 10px ${C.blue}` }} transition={{ type:"spring", stiffness:400, damping:34 }}/>}
           <div style={{ marginTop:-20, position:"relative" }}>
             {isScanActive&&<motion.div animate={{ scale:[1,1.3,1], opacity:[0.5,0,0.5] }} transition={{ duration:2.4, repeat:Infinity }}
               style={{ position:"absolute", inset:-4, border:`1px solid ${C.blue}`, clipPath:"polygon(12% 0%,88% 0%,100% 12%,100% 88%,88% 100%,12% 100%,0% 88%,0% 12%)" }}/>}
             <motion.div animate={{ boxShadow:isScanActive?`0 0 28px ${C.blue}77,0 0 8px ${C.blue}`:`0 0 10px ${C.blue}22` }}
-              style={{ width:60, height:60, display:"flex", alignItems:"center", justifyContent:"center", border:`2px solid ${isScanActive?C.blue:C.border}`, background:isScanActive?`linear-gradient(135deg,#001F32,#002D48)`:C.bgCard, clipPath:"polygon(12% 0%,88% 0%,100% 12%,100% 88%,88% 100%,12% 100%,0% 88%,0% 12%)" }}>
+              style={{ width:60, height:60, display:"flex", alignItems:"center", justifyContent:"center",
+                border:`2px solid ${isScanActive?C.blue:C.border}`,
+                background:isScanActive?`linear-gradient(135deg,#001F32,#002D48)`:C.bgCard,
+                clipPath:"polygon(12% 0%,88% 0%,100% 12%,100% 88%,88% 100%,12% 100%,0% 88%,0% 12%)" }}>
               <ScanSVG active={isScanActive}/>
             </motion.div>
           </div>
           <motion.span animate={{ color:isScanActive?C.blue:C.textFaint }} style={{ fontFamily:C.mono, fontSize:7, letterSpacing:"0.1em", marginTop:4 }}>SCAN</motion.span>
-        </motion.button>
+        </motion.button> 
+
         {rightTabs.map(t=><NavBtn key={t.id} {...t}/>)}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -2786,8 +2811,6 @@ function ArmoryInner() {
   const tIdx = TAB_ORDER.indexOf(tab), pIdx = TAB_ORDER.indexOf(prevTab);
   const dir = tIdx > pIdx ? 1 : tIdx < pIdx ? -1 : 1;
   const Page=TAB_PAGES[tab]||ScanTab;
-
-  const { theme, C:TC, toggleTheme } = useTheme();
 
   return (
     <AppCtx.Provider value={{ state, dispatch, user, logout, theme, C:TC, toggleTheme }}>
@@ -2895,6 +2918,54 @@ function AuthGate() {
             </motion.div>
         }
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }
+}}>
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="p-8 border-2 text-center"
+          style={{ 
+            backgroundColor: C.bgCard, 
+            borderColor: lv.color,
+            boxShadow: `0 0 30px ${lv.color}33`
+          }}
+        >
+          <div style={{ color: lv.color, fontSize: '0.9rem', letterSpacing: '2px', marginBottom: '8px' }}>LEVEL UP</div>
+          <div style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '16px', color: C.textPrimary }}>{lv.name}</div>
+          <div style={{ color: C.textSecond, marginBottom: '24px' }}>{lv.perk}</div>
+          <button
+            onClick={() => dispatch({ type: "DISMISS_LEVELUP" })}
+            className="px-6 py-2 font-bold"
+            style={{ backgroundColor: lv.color, color: C.bg }}
+          >
+            CONFIRM
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // 메인 App 컴포넌트
+  export default function ArmoryApp() {
+    const [state, dispatch] = useReducer(reducer, INIT_STATE);
+
+    return (
+      <ThemeProvider>
+        <AppCtx.Provider value={{ state, dispatch, C }}>
+          <div style={{ backgroundColor: C.bg, color: C.textPrimary, minHeight: '100vh' }}>
+            <DateWatcher />
+            <RoutineAlertEngine />
+            <LevelUpOverlay />
+            
+            {/* 여기에 실제 앱 UI 컴포넌트들이 위치합니다. */}
+            <div className="p-4">
+              <h1 className="text-2xl font-bold" style={{ color: C.blue }}>ARMORY SYSTEM ONLINE</h1>
+              <p className="text-sm opacity-60">오퍼레이터: {state.xp} XP / HP {state.hp}</p>
+            </div>
+          </div>
+        </AppCtx.Provider>
+      </ThemeProvider>
+    );
+  }
