@@ -3,19 +3,76 @@ import { useState, useEffect, useRef, useCallback, createContext, useContext, us
 import { motion, AnimatePresence } from "framer-motion";
 
 // ══════════════════════════════════════════════════════════════════
-// DESIGN TOKENS
+// DESIGN TOKENS — 다크 / 라이트 테마
 // ══════════════════════════════════════════════════════════════════
-const C = {
-  bg:"#01080F", bgCard:"#071520", bgCardHi:"#0D2235", bgStrip:"#040E18",
-  border:"#1A3A52", borderHi:"#2A5A7A", borderFx:"#3A7A9A",
-  blue:"#18CFFF", blueGlow:"rgba(24,207,255,0.22)", blueDim:"#0A4A6A",
-  blueText:"#6ABFDF", blueSub:"#3A8AAA",
-  red:"#FF5555", redDim:"#2A0A0A", orange:"#FF9933", yellow:"#FFD700",
-  green:"#00FF99", greenDim:"#003320", purple:"#BB88FF",
-  gold:"#FFD700", silver:"#C0C8D0", bronze:"#CD7F32",
-  textPrimary:"#EAF6FF", textSecond:"#8BBDD6", textMuted:"#4A7A9A", textFaint:"#1E4A62",
-  mono:"'JetBrains Mono','Courier New',monospace",
+const THEMES = {
+  dark: {
+    bg:"#01080F", bgCard:"#071520", bgCardHi:"#0D2235", bgStrip:"#040E18",
+    border:"#1A3A52", borderHi:"#2A5A7A", borderFx:"#3A7A9A",
+    blue:"#18CFFF", blueGlow:"rgba(24,207,255,0.22)", blueDim:"#0A4A6A",
+    blueText:"#6ABFDF", blueSub:"#3A8AAA",
+    red:"#FF5555", redDim:"#2A0A0A", orange:"#FF9933", yellow:"#FFD700",
+    green:"#00FF99", greenDim:"#003320", purple:"#BB88FF",
+    gold:"#FFD700", silver:"#C0C8D0", bronze:"#CD7F32",
+    textPrimary:"#EAF6FF", textSecond:"#8BBDD6", textMuted:"#4A7A9A", textFaint:"#1E4A62",
+    // 다크 전용
+    scanlineBg:"#ffffff",
+    navBg:"rgba(1,6,12,0.98)",
+    topBarBg:"rgba(1,6,12,0.97)",
+    gridColor:"rgba(24,207,255,0.05)",
+  },
+  light: {
+    bg:"#F2F4F6", bgCard:"#FFFFFF", bgCardHi:"#EBF0F5", bgStrip:"#E4EAF0",
+    border:"#C5D4E0", borderHi:"#8DAABF", borderFx:"#6A8FA8",
+    blue:"#0099CC", blueGlow:"rgba(0,153,204,0.18)", blueDim:"#CCE8F4",
+    blueText:"#006E99", blueSub:"#3A7A9A",
+    red:"#E03030", redDim:"#FDEAEA", orange:"#D4720A", yellow:"#B8900A",
+    green:"#0A8A55", greenDim:"#E4F5EE", purple:"#6A35CC",
+    gold:"#B8900A", silver:"#6A7A88", bronze:"#8B5020",
+    textPrimary:"#0A1A2A", textSecond:"#2A4A62", textMuted:"#5A7A92", textFaint:"#8AAABB",
+    // 라이트 전용
+    scanlineBg:"#000000",
+    navBg:"rgba(242,244,246,0.98)",
+    topBarBg:"rgba(242,244,246,0.97)",
+    gridColor:"rgba(0,153,204,0.04)",
+  },
 };
+
+// ThemeContext — 전역 테마 상태
+const ThemeCtx = createContext({ theme:"dark", C:THEMES.dark, toggleTheme:()=>{} });
+function useTheme() { return useContext(ThemeCtx); }
+
+// C는 항상 useTheme().C 로 가져오지만
+// 컴포넌트 외부(데이터 정의 등)에서 기본값으로 사용할 fallback
+let C = THEMES.dark;
+
+function ThemeProvider({ children }) {
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem("armory_theme") || "dark"; } catch { return "dark"; }
+  });
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    try { localStorage.setItem("armory_theme", next); } catch {}
+  };
+
+  C = THEMES[theme];
+
+  return (
+    <ThemeCtx.Provider value={{ theme, C:THEMES[theme], toggleTheme }}>
+      {children}
+    </ThemeCtx.Provider>
+  );
+}
+
+// useC() — 어느 컴포넌트에서든 현재 테마 색상 반환
+// AppCtx(로그인 후)와 ThemeCtx(로그인 전 포함) 모두 지원
+function useC() {
+  const themeCtx = useContext(ThemeCtx);
+  const appCtx = useContext(AppCtx);
+  return (appCtx?.C) || themeCtx?.C || THEMES.dark;
+}
 
 // ══════════════════════════════════════════════════════════════════
 // AUTH SYSTEM
@@ -32,16 +89,18 @@ const C = {
      1. developers.kakao.com → 앱 생성 → REST API 키 복사
      2. KAKAO_REST_KEY 교체, Redirect URI 등록
    ───────────────────────────────────────────────────────────────── */
+const getOrigin = () => (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
+
 const AUTH_CONFIG = {
   google: {
     clientId: "YOUR_GOOGLE_CLIENT_ID",       // ← 교체
-    redirectUri: window?.location?.origin + "/auth/google/callback",
+    get redirectUri() { return getOrigin() + "/auth/google/callback"; },
     scope: "openid email profile",
     authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
   },
   kakao: {
     restKey: "YOUR_KAKAO_REST_API_KEY",       // ← 교체
-    redirectUri: window?.location?.origin + "/auth/kakao/callback",
+    get redirectUri() { return getOrigin() + "/auth/kakao/callback"; },
     authUrl: "https://kauth.kakao.com/oauth/authorize",
     scope: "profile_nickname profile_image account_email",
   },
@@ -72,6 +131,7 @@ function openOAuth(provider) {
   if (isDev) return null; // caller handles mock
 
   const url = `${cfg.authUrl}?${params}`;
+  if (typeof window === "undefined") return null;
   const popup = window.open(url, `${provider}_oauth`, "width=500,height=650,left=400,top=100");
   return popup;
 }
@@ -121,20 +181,23 @@ function AuthProvider({ children }) {
 
       // 실제 OAuth: popup 메시지 수신
       const handleMessage = (e) => {
+        if (typeof window === "undefined") return;
         if (e.origin !== window.location.origin) return;
         if (e.data?.type !== "OAUTH_SUCCESS") return;
         const authUser = { ...e.data.user, provider, joinedAt: new Date().toISOString() };
         saveAuth(authUser);
         setUser(authUser);
         setAuthState("idle");
-        window.removeEventListener("message", handleMessage);
+        if (typeof window !== "undefined") window.removeEventListener("message", handleMessage);
         popup?.close();
       };
-      window.addEventListener("message", handleMessage);
+      if (typeof window !== "undefined") {
+        window.addEventListener("message", handleMessage);
+      }
 
       // 타임아웃 처리
       setTimeout(() => {
-        window.removeEventListener("message", handleMessage);
+        if (typeof window !== "undefined") window.removeEventListener("message", handleMessage);
         if (!user) { setAuthState("error"); }
         popup?.close();
       }, 120_000);
@@ -241,10 +304,10 @@ function calcStatus(v) { if(v>=80)return"OPTIMAL"; if(v>=60)return"MODERATE"; if
 function metricColor(v) { if(v>=80)return C.green; if(v>=60)return C.blue; if(v>=40)return C.yellow; return C.red; }
 
 const INIT_METRICS = [
-  { id:"moisture",    label:"수분",   en:"HYDRATION",   value:38, status:"CRITICAL", color:C.red    },
-  { id:"sebum",       label:"유분",   en:"SEBUM",       value:71, status:"ELEVATED", color:C.orange },
-  { id:"sensitivity", label:"민감도", en:"SENSITIVITY", value:55, status:"MODERATE", color:C.blue   },
-  { id:"barrier",     label:"방어막", en:"BARRIER",     value:44, status:"WARNING",  color:C.yellow },
+  { id:"moisture",    label:"수분",   en:"HYDRATION",   value:38, status:"CRITICAL", color:C.red,    icon:"◉" },
+  { id:"sebum",       label:"유분",   en:"SEBUM",       value:71, status:"ELEVATED", color:C.orange, icon:"◈" },
+  { id:"sensitivity", label:"민감도", en:"SENSITIVITY", value:55, status:"MODERATE", color:C.blue,   icon:"◆" },
+  { id:"barrier",     label:"방어막", en:"BARRIER",     value:44, status:"WARNING",  color:C.yellow, icon:"▣" },
 ];
 
 const INIT_STATE = {
@@ -600,6 +663,20 @@ const PRODUCTS=[
   { id:"p3",unit:"WPN-003",name:"BARRIER SHIELD PRO", tagline:"세라마이드 / 방어막 복구",        price:"₩35,000",specs:[["용량","60ml"],["성분","CER 5%"],["지속","24h"],["등급","A-CLASS"]],metricId:"sensitivity",icon:"◆",stock:3  },
   { id:"p4",unit:"WPN-004",name:"FULL LOADOUT KIT",   tagline:"4종 풀세트 / 완전 복구",         price:"₩98,000",specs:[["구성","4종"],["절감","22%"],["기간","30일"],["등급","S+"]],         metricId:"barrier",    icon:"▣",stock:5  },
 ];
+// ── 랭킹 목데이터 (실제 서버 연동 시 API로 교체)
+const MOCK_RANKING = [
+  { rank:1,  name:"ShadowOp",    lv:9,  xp:4200, hp:94, streak:21, badge:"◆", badgeColor:C.purple },
+  { rank:2,  name:"IronSkin",    lv:8,  xp:3100, hp:88, streak:14, badge:"▣", badgeColor:C.orange },
+  { rank:3,  name:"NightWatch",  lv:7,  xp:2400, hp:82, streak:10, badge:"◈", badgeColor:C.yellow },
+  { rank:4,  name:"TacOps",      lv:6,  xp:1850, hp:77, streak:7,  badge:"◉", badgeColor:C.blue   },
+  { rank:5,  name:"GhostSkin",   lv:5,  xp:1300, hp:71, streak:5,  badge:"◆", badgeColor:C.blue   },
+  { rank:6,  name:"AlphaUnit",   lv:5,  xp:1100, hp:68, streak:4,  badge:"▣", badgeColor:C.blue   },
+  { rank:7,  name:"BreachPro",   lv:4,  xp:750,  hp:63, streak:3,  badge:"◈", badgeColor:C.green  },
+  { rank:8,  name:"SkinForce",   lv:3,  xp:480,  hp:58, streak:2,  badge:"◉", badgeColor:C.green  },
+  { rank:9,  name:"ReconUnit",   lv:2,  xp:210,  hp:52, streak:1,  badge:"◆", badgeColor:C.textMuted },
+  { rank:10, name:"NewRecruit",  lv:1,  xp:40,   hp:44, streak:0,  badge:"▣", badgeColor:C.textMuted },
+];
+
 const SCAN_PHASES=[
   {key:"INIT",   msg:"얼굴을 프레임 안에 위치시키십시오",color:C.textMuted},
   {key:"DETECT", msg:"◈ 얼굴 감지됨 — 정렬 중...",       color:C.yellow  },
@@ -664,6 +741,7 @@ async function simulateDecay(currentMetrics, completionRate) {
 // DATE WATCHER — midnight reset
 // ══════════════════════════════════════════════════════════════════
 function DateWatcher() {
+  const C = useC();
   const { dispatch } = useApp();
   useEffect(() => {
     dispatch({ type:"NEW_DAY" });
@@ -682,6 +760,7 @@ function DateWatcher() {
 // ROUTINE ALERT ENGINE
 // ══════════════════════════════════════════════════════════════════
 function RoutineAlertEngine() {
+  const C = useC();
   const { state, dispatch } = useApp();
   const today = todayKey();
   const todayLog = state.dailyLog[today];
@@ -715,6 +794,7 @@ function RoutineAlertEngine() {
 // LEVEL UP POPUP
 // ══════════════════════════════════════════════════════════════════
 function LevelUpOverlay() {
+  const C = useC();
   const { state, dispatch } = useApp();
   const lv = state.levelUpQueue[0];
 
@@ -777,9 +857,12 @@ function LevelUpOverlay() {
 // LOGIN SCREEN
 // ══════════════════════════════════════════════════════════════════
 function LoginScreen() {
+  const C = useC();
+  const { theme, toggleTheme } = useTheme();
   const { login, authState } = useAuth();
   const [activeBtn, setActiveBtn] = useState(null);
   const [dots, setDots] = useState(".");
+  const isDark = theme === "dark";
 
   // 로딩 점 애니메이션
   useEffect(() => {
@@ -833,6 +916,36 @@ function LoginScreen() {
           transition={{ duration:p.dur, delay:p.delay, repeat:Infinity }}
           style={{ position:"absolute", left:`${p.x}%`, top:`${p.y}%`, width:p.size, height:p.size, borderRadius:"50%", background:C.blue, pointerEvents:"none" }}/>
       ))}
+
+      {/* 테마 토글 — 우상단 */}
+      <div style={{ position:"absolute", top:14, right:14, zIndex:10 }}>
+        <motion.button whileTap={{ scale:0.85 }} onClick={()=>{ SFX.tap(); toggleTheme(); }}
+          style={{ background:"none", border:`1px solid ${C.border}`, cursor:"pointer", padding:"5px 7px",
+            borderRadius:6, display:"flex", alignItems:"center", gap:4 }}>
+          <AnimatePresence mode="wait">
+            {isDark ? (
+              <motion.div key="sun" initial={{ rotate:-90, opacity:0 }} animate={{ rotate:0, opacity:1 }} exit={{ rotate:90, opacity:0 }} transition={{ duration:0.22 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="4" stroke={C.yellow} strokeWidth="2"/>
+                  {[0,45,90,135,180,225,270,315].map(deg=>{
+                    const r=Math.PI/180,x1=12+7*Math.cos(deg*r),y1=12+7*Math.sin(deg*r),x2=12+9*Math.cos(deg*r),y2=12+9*Math.sin(deg*r);
+                    return <line key={deg} x1={x1} y1={y1} x2={x2} y2={y2} stroke={C.yellow} strokeWidth="1.5" strokeLinecap="round"/>;
+                  })}
+                </svg>
+              </motion.div>
+            ) : (
+              <motion.div key="moon" initial={{ rotate:90, opacity:0 }} animate={{ rotate:0, opacity:1 }} exit={{ rotate:-90, opacity:0 }} transition={{ duration:0.22 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke={C.blue} strokeWidth="2" fill={`${C.blue}33`}/>
+                </svg>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <span style={{ fontFamily:C.mono, fontSize:8, color:C.textMuted, letterSpacing:"0.1em" }}>
+            {isDark?"LIGHT":"DARK"}
+          </span>
+        </motion.button>
+      </div>
 
       {/* ── HERO SECTION ── */}
       <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"40px 32px 0" }}>
@@ -995,13 +1108,16 @@ function LoginScreen() {
 // PRIMITIVES
 // ══════════════════════════════════════════════════════════════════
 function HUDCorners({ color=C.blue, size=12, thick=2 }) {
+  const C = useC();
   const b=`${thick}px solid ${color}`,s={position:"absolute",width:size,height:size};
   return (<><span style={{...s,top:0,left:0,borderTop:b,borderLeft:b}}/><span style={{...s,top:0,right:0,borderTop:b,borderRight:b}}/><span style={{...s,bottom:0,left:0,borderBottom:b,borderLeft:b}}/><span style={{...s,bottom:0,right:0,borderBottom:b,borderRight:b}}/></>);
 }
 function Clip({ children, cut=10, style, onClick }) {
+  const C = useC();
   return <div onClick={onClick} style={{ clipPath:`polygon(0 0,calc(100% - ${cut}px) 0,100% ${cut}px,100% 100%,${cut}px 100%,0 calc(100% - ${cut}px))`, ...style }}>{children}</div>;
 }
 function GlowBar({ value, max=100, color, h=7, anim=true, delay=0 }) {
+  const C = useC();
   const pct=Math.min((value/max)*100,100);
   return (
     <Clip cut={4} style={{ height:h, background:C.bgStrip, border:`1px solid ${C.border}` }}>
@@ -1012,10 +1128,12 @@ function GlowBar({ value, max=100, color, h=7, anim=true, delay=0 }) {
   );
 }
 function Dot({ on=true, color=C.green, size=6 }) {
+  const C = useC();
   return <motion.span animate={{ opacity:on?[1,0.25,1]:0.25 }} transition={{ duration:1.6,repeat:Infinity }}
     style={{ display:"inline-block", width:size, height:size, borderRadius:"50%", background:on?color:C.textFaint }}/>;
 }
 function SecLabel({ children }) {
+  const C = useC();
   return (
     <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
       <span style={{ fontFamily:C.mono, fontSize:9, letterSpacing:"0.2em", color:C.blueSub }}>{children}</span>
@@ -1024,11 +1142,13 @@ function SecLabel({ children }) {
   );
 }
 function LiveClock() {
+  const C = useC();
   const [t,setT]=useState("--:--:--");
   useEffect(()=>{ const tick=()=>{ const n=new Date(); setT(`${String(n.getHours()).padStart(2,"0")}:${String(n.getMinutes()).padStart(2,"0")}:${String(n.getSeconds()).padStart(2,"0")}`); }; tick(); const id=setInterval(tick,1000); return()=>clearInterval(id); },[]);
   return <>{t}</>;
 }
 function LiveDateLabel() {
+  const C = useC();
   const [d,setD]=useState("");
   useEffect(()=>{ const tick=()=>{ const n=new Date(); setD(n.toLocaleDateString("ko",{month:"2-digit",day:"2-digit",weekday:"short"})); }; tick(); const id=setInterval(tick,60000); return()=>clearInterval(id); },[]);
   return <>{d}</>;
@@ -1038,6 +1158,7 @@ function LiveDateLabel() {
 // XP BAR WIDGET (mini, for TopBar)
 // ══════════════════════════════════════════════════════════════════
 function MiniXPBar() {
+  const C = useC();
   const { state } = useApp();
   const lvInfo = getLevelInfo(state.xp);
   const pct = xpProgress(state.xp);
@@ -1059,6 +1180,7 @@ function MiniXPBar() {
 // TOAST LAYER
 // ══════════════════════════════════════════════════════════════════
 function ToastLayer() {
+  const C = useC();
   const { state, dispatch } = useApp();
   const visible = state.toasts.slice(-3);
   useEffect(() => {
@@ -1098,6 +1220,7 @@ function ToastLayer() {
 // TOP BAR ICONS
 // ══════════════════════════════════════════════════════════════════
 function WatchIcon({ alertCount, urgent, onClick }) {
+  const C = useC();
   const hasAlert=alertCount>0, borderCol=urgent?C.red:hasAlert?C.orange:C.blue;
   return (
     <motion.button whileTap={{ scale:0.86 }} onClick={onClick} style={{ background:"none", border:"none", cursor:"pointer", position:"relative", padding:4 }}>
@@ -1117,6 +1240,7 @@ function WatchIcon({ alertCount, urgent, onClick }) {
   );
 }
 function AmmoIcon({ count, onClick }) {
+  const C = useC();
   return (
     <motion.button whileTap={{ scale:0.88 }} onClick={onClick} style={{ background:"none", border:"none", cursor:"pointer", position:"relative", padding:4 }}>
       <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
@@ -1139,11 +1263,16 @@ function AmmoIcon({ count, onClick }) {
 // TOP BAR
 // ══════════════════════════════════════════════════════════════════
 function TopBar({ onWatchOpen, onCartOpen }) {
-  const { state } = useApp();
+  const C = useC();
+  const { state, theme, toggleTheme } = useApp();
   const activeAlerts = state.pushNotifs.filter(n=>!n.dismissed);
   const hasUrgent = activeAlerts.some(n=>n.urgent);
+  const isDark = theme === "dark";
   return (
-    <div style={{ flexShrink:0, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 12px 7px 16px", borderBottom:`1px solid ${C.border}`, background:"rgba(1,6,12,0.97)", backdropFilter:"blur(16px)", zIndex:30 }}>
+    <motion.div animate={{ background:C.topBarBg, borderColor:C.border }}
+      style={{ flexShrink:0, display:"flex", alignItems:"center", justifyContent:"space-between",
+        padding:"8px 12px 7px 16px", borderBottom:`1px solid ${C.border}`,
+        backdropFilter:"blur(16px)", zIndex:30 }}>
       {/* Brand + date */}
       <div>
         <div style={{ fontFamily:C.mono, fontWeight:900, fontSize:18, letterSpacing:"0.32em", color:C.blue, textShadow:`0 0 20px ${C.blueGlow}`, lineHeight:1 }}>ARMORY</div>
@@ -1157,17 +1286,48 @@ function TopBar({ onWatchOpen, onCartOpen }) {
 
       {/* Right: icons + clock */}
       <div style={{ display:"flex", alignItems:"center", gap:3 }}>
+        {/* 테마 토글 버튼 */}
+        <motion.button whileTap={{ scale:0.85 }} onClick={()=>{ SFX.tap(); haptic([6]); toggleTheme(); }}
+          style={{ background:"none", border:"none", cursor:"pointer", padding:4, position:"relative" }}>
+          <AnimatePresence mode="wait">
+            {isDark ? (
+              <motion.div key="sun" initial={{ rotate:-90, opacity:0 }} animate={{ rotate:0, opacity:1 }} exit={{ rotate:90, opacity:0 }} transition={{ duration:0.22 }}>
+                {/* 태양 아이콘 */}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="4.5" stroke={C.blue} strokeWidth="1.6"/>
+                  <line x1="12" y1="2" x2="12" y2="5"    stroke={C.blue} strokeWidth="1.4" strokeLinecap="round"/>
+                  <line x1="12" y1="19" x2="12" y2="22"  stroke={C.blue} strokeWidth="1.4" strokeLinecap="round"/>
+                  <line x1="2" y1="12" x2="5" y2="12"    stroke={C.blue} strokeWidth="1.4" strokeLinecap="round"/>
+                  <line x1="19" y1="12" x2="22" y2="12"  stroke={C.blue} strokeWidth="1.4" strokeLinecap="round"/>
+                  <line x1="4.9" y1="4.9" x2="7.1" y2="7.1"   stroke={C.blue} strokeWidth="1.4" strokeLinecap="round"/>
+                  <line x1="16.9" y1="16.9" x2="19.1" y2="19.1" stroke={C.blue} strokeWidth="1.4" strokeLinecap="round"/>
+                  <line x1="4.9" y1="19.1" x2="7.1" y2="16.9" stroke={C.blue} strokeWidth="1.4" strokeLinecap="round"/>
+                  <line x1="16.9" y1="7.1" x2="19.1" y2="4.9"  stroke={C.blue} strokeWidth="1.4" strokeLinecap="round"/>
+                </svg>
+              </motion.div>
+            ) : (
+              <motion.div key="moon" initial={{ rotate:90, opacity:0 }} animate={{ rotate:0, opacity:1 }} exit={{ rotate:-90, opacity:0 }} transition={{ duration:0.22 }}>
+                {/* 달 아이콘 */}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke={C.blue} strokeWidth="1.6" fill="none"/>
+                </svg>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.button>
+
         <WatchIcon alertCount={activeAlerts.length} urgent={hasUrgent} onClick={()=>{ SFX.tap(); haptic([8]); onWatchOpen(); }}/>
         <AmmoIcon count={state.cart.length} onClick={()=>{ SFX.tap(); haptic([8]); onCartOpen(); }}/>
         <div style={{ width:1, height:22, background:C.border, margin:"0 3px" }}/>
         <div style={{ textAlign:"right" }}>
           <div style={{ fontFamily:C.mono, fontWeight:700, fontSize:12, color:C.blue }}><LiveClock /></div>
           <div style={{ display:"flex", alignItems:"center", gap:3, justifyContent:"flex-end", marginTop:1 }}>
-            <Dot on color={C.green} size={5}/><span style={{ fontFamily:C.mono, fontSize:7, color:"#1A8A4A" }}>ONLINE</span>
+            <Dot on color={C.green} size={5}/>
+            <span style={{ fontFamily:C.mono, fontSize:7, color:isDark?"#1A8A4A":C.green }}>ONLINE</span>
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -1175,6 +1335,7 @@ function TopBar({ onWatchOpen, onCartOpen }) {
 // PUSH PANEL
 // ══════════════════════════════════════════════════════════════════
 function PushPanel({ onClose, onGoLoadout }) {
+  const C = useC();
   const { state, dispatch } = useApp();
   const active = state.pushNotifs.filter(n=>!n.dismissed);
   const today = todayKey();
@@ -1249,6 +1410,7 @@ function PushPanel({ onClose, onGoLoadout }) {
 // LIVE METRIC CARD
 // ══════════════════════════════════════════════════════════════════
 function LiveMetricCard({ metric }) {
+  const C = useC();
   const prev=useRef(metric.value);
   const [delta,setDelta]=useState(null);
   useEffect(()=>{ const d=metric.value-prev.current; if(d!==0){setDelta(d); setTimeout(()=>setDelta(null),1800);} prev.current=metric.value; },[metric.value]);
@@ -1268,6 +1430,7 @@ function LiveMetricCard({ metric }) {
 // SCAN BASE
 // ══════════════════════════════════════════════════════════════════
 function ScanBase({ onEngage }) {
+  const C = useC();
   const { state } = useApp();
   const { hp, metrics, env } = state;
 
@@ -1384,7 +1547,7 @@ function ScanBase({ onEngage }) {
         <motion.button initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.65 }}
           whileTap={{ scale:0.96 }} onClick={()=>{ SFX.scan(); haptic([15]); onEngage(); }}
           style={{ width:"100%", padding:"17px 0", fontFamily:C.mono, fontWeight:900, fontSize:16, letterSpacing:"0.3em", color:lvInfo.color,
-            background:"linear-gradient(135deg,#001828,#002840)", border:`2px solid ${lvInfo.color}`,
+            background:`linear-gradient(135deg,${C.bgCard},${C.bgCardHi})`, border:`2px solid ${lvInfo.color}`,
             clipPath:"polygon(14px 0%,calc(100% - 14px) 0%,100% 14px,100% calc(100% - 14px),calc(100% - 14px) 100%,14px 100%,0% calc(100% - 14px),0% 14px)",
             boxShadow:`0 0 36px ${lvInfo.color}44,inset 0 0 36px ${lvInfo.color}0A`, position:"relative", overflow:"hidden", cursor:"pointer" }}>
           <HUDCorners color={lvInfo.color} size={9}/>
@@ -1401,6 +1564,7 @@ function ScanBase({ onEngage }) {
 // SCAN CAMERA
 // ══════════════════════════════════════════════════════════════════
 function ScanCamera({ onComplete, onBack }) {
+  const C = useC();
   const { state, dispatch } = useApp();
   const videoRef=useRef(null);
   const [phaseIdx,setPhaseIdx]=useState(0);
@@ -1502,6 +1666,7 @@ function ScanCamera({ onComplete, onBack }) {
 // SCAN REPORT
 // ══════════════════════════════════════════════════════════════════
 function ScanReport({ onBack }) {
+  const C = useC();
   const { state, dispatch } = useApp();
   const [idx,setIdx]=useState(0);
   const [toast,setToast]=useState(null);
@@ -1561,7 +1726,7 @@ function ScanReport({ onBack }) {
                 {product.specs.map(([k,v])=>(<div key={k} style={{ display:"flex", justifyContent:"space-between", borderBottom:`1px solid ${C.border}`, paddingBottom:4 }}><span style={{ fontSize:9, color:C.textMuted }}>{k}</span><span style={{ fontSize:9, fontWeight:900, color:C.blueText }}>{v}</span></div>))}
               </div>
               <motion.button whileTap={{ scale:0.97 }} onClick={addKit}
-                style={{ width:"100%", padding:"13px 0", fontFamily:C.mono, fontWeight:900, fontSize:13, letterSpacing:"0.25em", color:inCart?C.green:C.blue, background:inCart?`${C.green}0D`:"linear-gradient(135deg,#001828,#002840)", border:`2px solid ${inCart?`${C.green}88`:C.blue}`, clipPath:"polygon(8px 0%,calc(100% - 8px) 0%,100% 8px,100% calc(100% - 8px),calc(100% - 8px) 100%,8px 100%,0% calc(100% - 8px),0% 8px)", position:"relative", overflow:"hidden", cursor:"pointer" }}>
+                style={{ width:"100%", padding:"13px 0", fontFamily:C.mono, fontWeight:900, fontSize:13, letterSpacing:"0.25em", color:inCart?C.green:C.blue, background:inCart?`${C.green}0D`:`linear-gradient(135deg,${C.bgCard},${C.bgCardHi})`, border:`2px solid ${inCart?`${C.green}88`:C.blue}`, clipPath:"polygon(8px 0%,calc(100% - 8px) 0%,100% 8px,100% calc(100% - 8px),calc(100% - 8px) 100%,8px 100%,0% calc(100% - 8px),0% 8px)", position:"relative", overflow:"hidden", cursor:"pointer" }}>
                 {!inCart&&<motion.div animate={{ x:["-100%","200%"] }} transition={{ duration:2.8, repeat:Infinity, ease:"linear" }} style={{ position:"absolute", inset:0, background:`linear-gradient(90deg,transparent,${C.blue}18,transparent)`, pointerEvents:"none" }}/>}
                 {inCart?"✓ ADDED TO KIT":"[ ADD TO KIT ]"}
               </motion.button>
@@ -1580,6 +1745,7 @@ function ScanReport({ onBack }) {
 }
 
 function ScanTab() {
+  const C = useC();
   const [view,setView]=useState("base");
   return (<div style={{ height:"100%", position:"relative" }}>
     <AnimatePresence mode="wait">
@@ -1594,6 +1760,7 @@ function ScanTab() {
 // LOADOUT TAB
 // ══════════════════════════════════════════════════════════════════
 function LoadoutTab() {
+  const C = useC();
   const { state, dispatch } = useApp();
   const today = todayKey();
   const todayLog = state.dailyLog[today] || { completedItems:new Set(), scanDone:false, fullDone:false };
@@ -1956,6 +2123,7 @@ function BaseTab() {
 // CART DRAWER
 // ══════════════════════════════════════════════════════════════════
 function CartDrawer({ onClose }) {
+  const C = useC();
   const { state, dispatch } = useApp();
   const items=PRODUCTS.filter(p=>state.cart.includes(p.id));
   const total=items.reduce((s,p)=>s+parseInt(p.price.replace(/[^0-9]/g,"")),0);
@@ -1988,33 +2156,634 @@ function CartDrawer({ onClose }) {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// TAB: 피부 분석 대시보드 (DASHBOARD)
+// ══════════════════════════════════════════════════════════════════
+function DashboardTab() {
+  const C = useC();
+  const { state } = useApp();
+  const { metrics, hp, scanHistory } = state;
+  const lvInfo = getLevelInfo(state.xp);
+
+  // 게이지 각도 계산 (반원 계기판)
+  function gaugeAngle(v, max=100) { return -135 + (v/max)*270; }
+
+  function GaugeArc({ value, max=100, color, size=80 }) {
+    const pct = value/max;
+    const r = size/2 - 8;
+    const cx = size/2, cy = size/2;
+    const startAngle = -225 * Math.PI/180;
+    const endAngle = (startAngle + pct * 270 * Math.PI/180);
+    const x1 = cx + r*Math.cos(startAngle), y1 = cy + r*Math.sin(startAngle);
+    const x2 = cx + r*Math.cos(endAngle),   y2 = cy + r*Math.sin(endAngle);
+    const large = pct*270 > 180 ? 1 : 0;
+    // bg arc
+    const bx2 = cx + r*Math.cos((-225+270)*Math.PI/180);
+    const by2 = cy + r*Math.sin((-225+270)*Math.PI/180);
+    return (
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <path d={`M ${x1} ${y1} A ${r} ${r} 0 1 1 ${bx2} ${by2}`}
+          fill="none" stroke={C.border} strokeWidth="5" strokeLinecap="round"/>
+        {pct > 0 && <path d={`M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`}
+          fill="none" stroke={color} strokeWidth="5" strokeLinecap="round"/>}
+        <text x={cx} y={cy+5} textAnchor="middle" fontSize="13" fontWeight="900"
+          fill={color} fontFamily="monospace">{value}</text>
+        <text x={cx} y={cy+16} textAnchor="middle" fontSize="6"
+          fill={C.textMuted} fontFamily="monospace">/ {max}</text>
+      </svg>
+    );
+  }
+
+  return (
+    <div style={{ height:"100%", overflowY:"auto", padding:"14px", fontFamily:C.mono }}>
+
+      {/* 오늘 날짜 + HP 헤더 */}
+      <motion.div initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }}>
+        <Clip cut={12} style={{ border:`1px solid ${lvInfo.color}44`, background:C.bgCard, padding:"12px 14px", marginBottom:14 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div>
+              <div style={{ fontSize:8, color:C.textMuted, letterSpacing:"0.15em" }}>◈ 오늘의 피부 상태</div>
+              <div style={{ fontSize:12, fontWeight:900, color:C.textPrimary, marginTop:3 }}><LiveDateLabel /></div>
+            </div>
+            <div style={{ textAlign:"right" }}>
+              <motion.div key={hp} animate={{ color:hp<50?C.red:hp<70?C.yellow:C.green }}
+                style={{ fontSize:28, fontWeight:900, lineHeight:1 }}>{hp}</motion.div>
+              <div style={{ fontSize:9, color:C.textMuted }}>HP</div>
+            </div>
+          </div>
+          <div style={{ marginTop:10 }}>
+            <GlowBar value={hp} max={100} color={hp<50?C.red:hp<70?C.yellow:C.green} h={8} anim={false}/>
+          </div>
+        </Clip>
+      </motion.div>
+
+      {/* 4-gauge 계기판 */}
+      <SecLabel>◉ SKIN GAUGES // 실시간</SecLabel>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:10, marginBottom:16 }}>
+        {metrics.map((m,i) => (
+          <motion.div key={m.id} initial={{ opacity:0, scale:0.9 }} animate={{ opacity:1, scale:1 }} transition={{ delay:i*0.08 }}>
+            <Clip cut={8} style={{ border:`1px solid ${m.color}44`, background:C.bgCard, padding:"12px 8px", textAlign:"center" }}>
+              <GaugeArc value={m.value} max={100} color={m.color} size={90}/>
+              <div style={{ fontSize:11, fontWeight:900, color:m.color, marginTop:4 }}>{m.label}</div>
+              <div style={{ fontSize:8, color:C.textMuted, marginTop:2 }}>{m.en} // {m.status}</div>
+              <div style={{ marginTop:6 }}>
+                <GlowBar value={m.value} max={100} color={m.color} h={3} anim={false}/>
+              </div>
+            </Clip>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* 7일 HP 추이 그래프 */}
+      <SecLabel>◈ HP HISTORY // 최근 스캔</SecLabel>
+      <Clip cut={10} style={{ border:`1px solid ${C.border}`, background:C.bgCard, padding:14, marginBottom:14 }}>
+        {scanHistory.length === 0 ? (
+          <div style={{ textAlign:"center", padding:"16px 0", fontSize:10, color:C.textMuted }}>
+            스캔 기록이 없습니다. SCAN 탭에서 시작하세요.
+          </div>
+        ) : (
+          <div style={{ display:"flex", alignItems:"flex-end", gap:6, height:80, paddingBottom:4 }}>
+            {[...scanHistory].reverse().slice(0,8).map((s,i) => {
+              const pct = s.hp/100;
+              const col = s.hp<50?C.red:s.hp<70?C.yellow:C.green;
+              return (
+                <div key={s.id} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
+                  <div style={{ fontSize:7, color:col, fontWeight:900 }}>{s.hp}</div>
+                  <motion.div initial={{ height:0 }} animate={{ height:`${pct*60}px` }} transition={{ delay:i*0.06, duration:0.7, ease:[0.16,1,0.3,1] }}
+                    style={{ width:"100%", background:`linear-gradient(to top,${col}44,${col})`, minHeight:2 }}/>
+                  <div style={{ fontSize:6, color:C.textFaint }}>
+                    {new Date(s.date).toLocaleDateString("ko",{month:"2-digit",day:"2-digit"})}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Clip>
+
+      {/* 위협 분석 요약 */}
+      <SecLabel>⚠ THREAT ANALYSIS</SecLabel>
+      <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+        {metrics.map(m => {
+          const threatColor = m.value>=80?C.green:m.value>=60?C.blue:m.value>=40?C.yellow:C.red;
+          const threatLabel = m.value>=80?"OPTIMAL":m.value>=60?"MODERATE":m.value>=40?"WARNING":"CRITICAL";
+          const advice = {
+            moisture:"수분 보충 세럼 즉시 투입 권장",
+            sebum:"피지 억제 토너로 T존 집중 관리",
+            sensitivity:"저자극 보습제로 방어막 강화",
+            barrier:"세라마이드 성분 크림 야간 적용",
+          }[m.id] || "";
+          return (
+            <Clip key={m.id} cut={7} style={{ border:`1px solid ${threatColor}33`, background:C.bgCard, padding:"10px 12px" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:m.value<60?6:0 }}>
+                <div style={{ width:28, height:28, border:`1px solid ${threatColor}66`, background:`${threatColor}11`,
+                  display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, flexShrink:0 }}>
+                  {m.icon}
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:11, fontWeight:900, color:C.textPrimary }}>{m.label} // {m.en}</div>
+                  <div style={{ fontSize:8, color:C.textMuted, marginTop:1 }}>현재 {m.value}% — {m.status}</div>
+                </div>
+                <Clip cut={4} style={{ padding:"3px 8px", border:`1px solid ${threatColor}55`, background:`${threatColor}11` }}>
+                  <span style={{ fontSize:8, fontWeight:900, color:threatColor }}>{threatLabel}</span>
+                </Clip>
+              </div>
+              {m.value < 60 && <div style={{ fontSize:9, color:C.textMuted, marginTop:4, paddingLeft:38 }}>▶ {advice}</div>}
+            </Clip>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TAB: 제품 상세 (ARSENAL)
+// ══════════════════════════════════════════════════════════════════
+function ArsenalTab() {
+  const C = useC();
+  const [selected, setSelected] = useState(null);
+  const { state, dispatch } = useApp();
+
+  const handleAdd = (id) => { SFX.add(); haptic([10,50,10]); dispatch({ type:"ADD_TO_CART", id }); };
+
+  return (
+    <div style={{ height:"100%", overflowY:"auto", padding:"14px", fontFamily:C.mono }}>
+      <SecLabel>◆ WEAPON ARSENAL // 무기 제원표</SecLabel>
+
+      {PRODUCTS.map((p, i) => {
+        const metric = state.metrics.find(m=>m.id===p.metricId);
+        const isOpen = selected === p.id;
+        const inCart = state.cart.includes(p.id);
+
+        return (
+          <motion.div key={p.id} initial={{ opacity:0, x:-12 }} animate={{ opacity:1, x:0 }} transition={{ delay:i*0.08 }}
+            style={{ marginBottom:10 }}>
+            <Clip cut={12} style={{ border:`1px solid ${isOpen?`${C.blue}77`:C.border}`, background: isOpen?C.bgCardHi:C.bgCard,
+              boxShadow: isOpen?`0 0 20px ${C.blue}11`:"none" }}>
+
+              {/* Header row */}
+              <motion.button whileTap={{ scale:0.99 }} onClick={()=>{ SFX.tap(); setSelected(isOpen?null:p.id); }}
+                style={{ width:"100%", display:"flex", alignItems:"center", gap:12, padding:"12px 14px", background:"none", border:"none", cursor:"pointer", textAlign:"left" }}>
+                <Clip cut={6} style={{ width:48, height:48, border:`1px solid ${C.blue}55`, background:`${C.blue}11`,
+                  display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:22, color:C.blue }}>
+                  {p.icon}
+                </Clip>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:8, color:C.textMuted, letterSpacing:"0.12em" }}>{p.unit}</div>
+                  <div style={{ fontSize:13, fontWeight:900, color:C.textPrimary, marginTop:2 }}>{p.name}</div>
+                  <div style={{ fontSize:9, color:C.blueText, marginTop:1 }}>{p.tagline}</div>
+                </div>
+                <div style={{ textAlign:"right", flexShrink:0 }}>
+                  <div style={{ fontSize:15, fontWeight:900, color:C.blue }}>{p.price}</div>
+                  <div style={{ fontSize:8, color:p.stock<5?C.red:C.green, marginTop:2 }}>
+                    {p.stock<5?"⚠ 품절임박":"재고있음"} {p.stock}개
+                  </div>
+                </div>
+              </motion.button>
+
+              {/* 펼쳐지는 제원표 */}
+              <AnimatePresence>
+                {isOpen && (
+                  <motion.div initial={{ height:0, opacity:0 }} animate={{ height:"auto", opacity:1 }}
+                    exit={{ height:0, opacity:0 }} transition={{ duration:0.22 }}
+                    style={{ overflow:"hidden" }}>
+                    <div style={{ padding:"0 14px 14px" }}>
+                      {/* 피부 연관 수치 */}
+                      {metric && (
+                        <div style={{ marginBottom:12, padding:"8px 10px", border:`1px solid ${metric.color}44`, background:`${metric.color}08`,
+                          clipPath:"polygon(0 0,calc(100% - 6px) 0,100% 6px,100% 100%,6px 100%,0 calc(100% - 6px))" }}>
+                          <div style={{ fontSize:8, color:C.textMuted, marginBottom:4 }}>현재 {metric.label} 수치 — 이 무기로 개선 가능</div>
+                          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                            <span style={{ fontSize:18, fontWeight:900, color:metric.color }}>{metric.value}%</span>
+                            <div style={{ flex:1 }}><GlowBar value={metric.value} max={100} color={metric.color} h={5} anim={false}/></div>
+                            <span style={{ fontSize:9, color:metric.color, fontWeight:700 }}>{metric.status}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 스펙 그리드 */}
+                      <div style={{ fontSize:8, color:C.textMuted, letterSpacing:"0.15em", marginBottom:6 }}>◆ 무기 제원</div>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"5px 12px", marginBottom:12 }}>
+                        {p.specs.map(([k,v])=>(
+                          <div key={k} style={{ display:"flex", justifyContent:"space-between", borderBottom:`1px solid ${C.border}`, paddingBottom:5 }}>
+                            <span style={{ fontSize:9, color:C.textMuted }}>{k}</span>
+                            <span style={{ fontSize:9, fontWeight:900, color:C.blueText }}>{v}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* ADD TO KIT */}
+                      <motion.button whileTap={{ scale:0.97 }} onClick={()=>handleAdd(p.id)}
+                        style={{ width:"100%", padding:"12px 0", fontFamily:C.mono, fontWeight:900, fontSize:12,
+                          letterSpacing:"0.25em", color:inCart?C.green:C.blue,
+                          background:inCart?`${C.green}0D`:`linear-gradient(135deg,${C.bgCard},${C.bgCardHi})`,
+                          border:`2px solid ${inCart?`${C.green}88`:C.blue}`, cursor:"pointer",
+                          clipPath:"polygon(8px 0%,calc(100% - 8px) 0%,100% 8px,100% calc(100% - 8px),calc(100% - 8px) 100%,8px 100%,0% calc(100% - 8px),0% 8px)",
+                          position:"relative", overflow:"hidden" }}>
+                        {!inCart&&<motion.div animate={{ x:["-100%","200%"] }} transition={{ duration:2.8, repeat:Infinity, ease:"linear" }}
+                          style={{ position:"absolute", inset:0, background:`linear-gradient(90deg,transparent,${C.blue}18,transparent)`, pointerEvents:"none" }}/>}
+                        {inCart?"✓ ADDED TO KIT":"[ ADD TO KIT ]"}
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </Clip>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TAB: 랭킹 / 리더보드 (RANKING)
+// ══════════════════════════════════════════════════════════════════
+function RankingTab() {
+  const C = useC();
+  const { state, user } = useApp();
+  const myLv = getLevelInfo(state.xp);
+  const myHP = state.hp;
+  const [filter, setFilter] = useState("xp"); // xp | hp | streak
+
+  const sorted = [...MOCK_RANKING].sort((a,b) => {
+    if (filter==="hp") return b.hp - a.hp;
+    if (filter==="streak") return b.streak - a.streak;
+    return b.xp - a.xp;
+  });
+
+  // 내 순위 추가 (목데이터에 없으면 마지막에 추가)
+  const myEntry = { rank:99, name:user?.name||"ME", lv:myLv.lv, xp:state.xp, hp:myHP, streak:state.streak, badge:"◉", badgeColor:C.blue, isMe:true };
+  const myRank = sorted.findIndex(r=>r.name===myEntry.name);
+
+  const rankColor = (rank) => {
+    if (rank===1) return C.gold;
+    if (rank===2) return C.silver;
+    if (rank===3) return C.bronze;
+    return C.textMuted;
+  };
+  const rankIcon = (rank) => rank===1?"◆":rank===2?"◈":rank===3?"◉":"·";
+
+  return (
+    <div style={{ height:"100%", overflowY:"auto", padding:"14px", fontFamily:C.mono }}>
+
+      {/* 내 순위 카드 */}
+      <motion.div initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }}>
+        <Clip cut={10} style={{ border:`1px solid ${C.blue}55`, background:C.bgCardHi, padding:"12px 14px", marginBottom:14, boxShadow:`0 0 20px ${C.blue}11` }}>
+          <div style={{ fontSize:8, color:C.blueSub, letterSpacing:"0.15em", marginBottom:6 }}>◈ 내 현재 순위</div>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ fontSize:28, fontWeight:900, color:C.blue, width:36, textAlign:"center" }}>
+              {myRank>=0 ? myRank+1 : "—"}
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:13, fontWeight:900, color:C.textPrimary }}>{user?.name||"OPERATOR"}</div>
+              <div style={{ fontSize:9, color:myLv.color, marginTop:1 }}>LV.{myLv.lv} {myLv.name}</div>
+            </div>
+            <div style={{ textAlign:"right" }}>
+              <div style={{ fontSize:14, fontWeight:900, color:C.gold }}>{state.xp} XP</div>
+              <div style={{ fontSize:9, color:C.textMuted }}>HP {myHP} · {state.streak}일 연속</div>
+            </div>
+          </div>
+          <div style={{ marginTop:8 }}>
+            <GlowBar value={xpProgress(state.xp)} max={100} color={myLv.color} h={4} anim={false}/>
+          </div>
+        </Clip>
+      </motion.div>
+
+      {/* 필터 탭 */}
+      <div style={{ display:"flex", gap:6, marginBottom:12 }}>
+        {[["xp","XP 순"],["hp","HP 순"],["streak","스트릭"]].map(([key,label])=>(
+          <motion.button key={key} whileTap={{ scale:0.94 }} onClick={()=>{ SFX.tap(); setFilter(key); }}
+            style={{ flex:1, padding:"7px 0", fontFamily:C.mono, fontSize:9, fontWeight:900,
+              letterSpacing:"0.1em", cursor:"pointer",
+              color:filter===key?C.bg:C.textMuted,
+              background:filter===key?C.blue:"transparent",
+              border:`1px solid ${filter===key?C.blue:C.border}`,
+              clipPath:"polygon(5px 0%,calc(100% - 5px) 0%,100% 5px,100% calc(100% - 5px),calc(100% - 5px) 100%,5px 100%,0% calc(100% - 5px),0% 5px)" }}>
+            {label}
+          </motion.button>
+        ))}
+      </div>
+
+      <SecLabel>◆ GLOBAL RANKING</SecLabel>
+
+      {/* 랭킹 리스트 */}
+      <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+        {sorted.map((entry, i) => {
+          const isTop3 = entry.rank <= 3;
+          const col = rankColor(entry.rank);
+          return (
+            <motion.div key={entry.rank} initial={{ opacity:0, x:16 }} animate={{ opacity:1, x:0 }} transition={{ delay:i*0.04 }}>
+              <Clip cut={isTop3?10:7} style={{
+                border:`1px solid ${isTop3?`${col}55`:C.border}`,
+                background:isTop3?`${col}08`:C.bgCard,
+                padding:isTop3?"11px 12px":"9px 12px",
+              }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  {/* Rank */}
+                  <div style={{ width:28, textAlign:"center", flexShrink:0 }}>
+                    <div style={{ fontSize:isTop3?16:12, fontWeight:900, color:col }}>{rankIcon(entry.rank)}</div>
+                    <div style={{ fontSize:7, color:col, fontWeight:700 }}>#{entry.rank}</div>
+                  </div>
+                  {/* Badge */}
+                  <div style={{ width:30, height:30, border:`1px solid ${entry.badgeColor}55`, background:`${entry.badgeColor}11`,
+                    display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, color:entry.badgeColor, flexShrink:0 }}>
+                    {entry.badge}
+                  </div>
+                  {/* Name + level */}
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:isTop3?13:11, fontWeight:900, color:C.textPrimary }}>{entry.name}</div>
+                    <div style={{ fontSize:8, color:C.textMuted, marginTop:1 }}>LV.{entry.lv} · {entry.streak}일 스트릭</div>
+                  </div>
+                  {/* Score */}
+                  <div style={{ textAlign:"right", flexShrink:0 }}>
+                    <div style={{ fontSize:13, fontWeight:900, color:filter==="hp"?entry.hp<50?C.red:entry.hp<70?C.yellow:C.green:filter==="streak"?C.orange:C.gold }}>
+                      {filter==="xp"?`${entry.xp}XP`:filter==="hp"?`${entry.hp}HP`:`${entry.streak}일`}
+                    </div>
+                    <div style={{ fontSize:7, color:C.textFaint }}>HP {entry.hp}</div>
+                  </div>
+                </div>
+              </Clip>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      <div style={{ textAlign:"center", padding:"16px 0 6px", fontSize:8, color:C.textFaint, letterSpacing:"0.1em" }}>
+        * 랭킹은 실시간 서버 연동 시 업데이트됩니다
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TAB: 프로필 / 오퍼레이터 카드 (PROFILE)  — BASE 탭 강화 버전
+// ══════════════════════════════════════════════════════════════════
+function ProfileTab() {
+  const C = useC();
+  const { state, user, logout } = useApp();
+  const [settings, setSettings] = useState([
+    {id:"notif", label:"작전 알림",   sub:"루틴 시간 푸시 알림",  on:true },
+    {id:"haptic",label:"햅틱 피드백", sub:"버튼 터치 진동",       on:true },
+    {id:"sound", label:"전술 사운드", sub:"UI 클릭 사운드",       on:true },
+    {id:"night", label:"야간 모드",   sub:"저조도 자동 전환",     on:false},
+  ]);
+  const toggle=(id)=>{ SFX.tap(); haptic([6]); setSettings(s=>s.map(x=>x.id===id?{...x,on:!x.on}:x)); };
+  const lvInfo = getLevelInfo(state.xp);
+  const nextLv = getNextLevel(state.xp);
+  const pct = xpProgress(state.xp);
+
+  return (
+    <div style={{ height:"100%", overflowY:"auto", padding:"14px", fontFamily:C.mono }}>
+
+      {/* ── 오퍼레이터 ID 카드 (강화) */}
+      <motion.div initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}>
+        <Clip cut={14} style={{ border:`2px solid ${lvInfo.color}55`, background:C.bgCard, padding:"18px 16px", marginBottom:14, position:"relative", overflow:"hidden" }}>
+          {/* 배경 글로우 */}
+          <div style={{ position:"absolute", top:-40, right:-40, width:120, height:120, borderRadius:"50%",
+            background:`radial-gradient(circle, ${lvInfo.color}18 0%, transparent 70%)`, pointerEvents:"none" }}/>
+
+          {/* 상단 배지 */}
+          <div style={{ display:"flex", alignItems:"center", gap:3, marginBottom:14 }}>
+            <div style={{ fontSize:7, letterSpacing:"0.2em", color:lvInfo.color }}>◈ OPERATOR ID CARD</div>
+            <div style={{ flex:1, height:1, background:`linear-gradient(90deg,${lvInfo.color}44,transparent)` }}/>
+            <div style={{ fontSize:7, color:C.textFaint }}>{user?.provider?.toUpperCase()||"LOCAL"}</div>
+          </div>
+
+          {/* 아바타 + 정보 */}
+          <div style={{ display:"flex", gap:14, alignItems:"center", marginBottom:16 }}>
+            {/* 아바타 */}
+            <div style={{ position:"relative" }}>
+              <Clip cut={10} style={{ width:64, height:64, border:`2px solid ${lvInfo.color}`,
+                background:`${lvInfo.color}18`, display:"flex", flexDirection:"column",
+                alignItems:"center", justifyContent:"center" }}>
+                {user?.avatar
+                  ? <img src={user.avatar} width={64} height={64} style={{ objectFit:"cover" }} alt="avatar"/>
+                  : <>
+                      <div style={{ fontWeight:900, fontSize:22, color:lvInfo.color, lineHeight:1 }}>{lvInfo.lv}</div>
+                      <div style={{ fontSize:7, color:`${lvInfo.color}88` }}>LV</div>
+                    </>
+                }
+              </Clip>
+              <motion.div animate={{ opacity:[0.4,1,0.4] }} transition={{ duration:2, repeat:Infinity }}
+                style={{ position:"absolute", inset:-3, border:`1px solid ${lvInfo.color}44`,
+                  clipPath:"polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px)" }}/>
+            </div>
+
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:900, fontSize:17, color:C.textPrimary }}>{user?.name||"OPERATOR"}</div>
+              <div style={{ fontSize:9, color:C.textMuted, marginTop:1 }}>{user?.email||""}</div>
+              <div style={{ fontSize:10, color:lvInfo.color, marginTop:4, fontWeight:700, letterSpacing:"0.08em" }}>
+                {lvInfo.name}
+              </div>
+              <div style={{ fontSize:8, color:C.textMuted, marginTop:1 }}>CLEARANCE LEVEL {lvInfo.lv}</div>
+            </div>
+          </div>
+
+          {/* XP 진행바 */}
+          <div style={{ marginBottom:12 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+              <span style={{ fontSize:8, color:C.textMuted }}>XP {state.xp.toLocaleString()} / {nextLv.maxXP.toLocaleString()}</span>
+              <span style={{ fontSize:8, color:lvInfo.color, fontWeight:900 }}>NEXT: LV.{nextLv.lv} — {Math.round(pct)}%</span>
+            </div>
+            <GlowBar value={state.xp} max={nextLv.maxXP} color={lvInfo.color} h={8} anim={false}/>
+          </div>
+
+          {/* 스탯 4종 */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6 }}>
+            {[
+              ["HP",`${state.hp}`,state.hp<50?C.red:state.hp<70?C.yellow:C.green],
+              ["XP",state.xp.toLocaleString(),C.gold],
+              ["STREAK",`${state.streak}일`,C.orange],
+              ["SCAN",`${state.scanHistory.length}회`,C.blue],
+            ].map(([k,v,col])=>(
+              <Clip key={k} cut={4} style={{ padding:"7px 3px", border:`1px solid ${C.border}`, textAlign:"center" }}>
+                <motion.div key={v} initial={{ scale:1.15, opacity:0.6 }} animate={{ scale:1, opacity:1 }}
+                  style={{ fontSize:13, fontWeight:900, color:col }}>{v}</motion.div>
+                <div style={{ fontSize:7, color:C.textMuted, marginTop:2 }}>{k}</div>
+              </Clip>
+            ))}
+          </div>
+
+          {/* 현재 레벨 특전 */}
+          <div style={{ marginTop:12, padding:"8px 10px", border:`1px solid ${lvInfo.color}44`, background:`${lvInfo.color}08`,
+            clipPath:"polygon(0 0,calc(100% - 6px) 0,100% 6px,100% 100%,6px 100%,0 calc(100% - 6px))" }}>
+            <div style={{ fontSize:8, color:`${lvInfo.color}99`, letterSpacing:"0.12em" }}>현재 레벨 특전</div>
+            <div style={{ fontSize:11, color:lvInfo.color, marginTop:3, fontWeight:700 }}>{lvInfo.perk}</div>
+          </div>
+        </Clip>
+      </motion.div>
+
+      {/* 레벨 트리 */}
+      <SecLabel>◆ OPERATOR LEVEL TREE</SecLabel>
+      <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:14 }}>
+        {LEVELS.map((lv,i)=>{
+          const isCur=lv.lv===lvInfo.lv, isUnlocked=state.xp>=lv.minXP;
+          return (
+            <motion.div key={lv.lv} initial={{ opacity:0, x:10 }} animate={{ opacity:1, x:0 }} transition={{ delay:i*0.03 }}>
+              <Clip cut={7} style={{ border:`1px solid ${isCur?`${lv.color}88`:isUnlocked?`${lv.color}33`:C.border}`,
+                background:isCur?`${lv.color}12`:isUnlocked?`${lv.color}05`:C.bgStrip, padding:"8px 12px",
+                display:"flex", alignItems:"center", gap:10 }}>
+                <div style={{ width:28, height:28, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0,
+                  border:`1.5px solid ${isUnlocked?lv.color:C.border}`, background:isUnlocked?`${lv.color}18`:"transparent" }}>
+                  <span style={{ fontFamily:C.mono, fontWeight:900, fontSize:11, color:isUnlocked?lv.color:C.textFaint }}>{lv.lv}</span>
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontFamily:C.mono, fontWeight:700, fontSize:11, color:isUnlocked?C.textPrimary:C.textFaint }}>{lv.name}</div>
+                  <div style={{ fontFamily:C.mono, fontSize:9, color:isUnlocked?C.textMuted:C.textFaint, marginTop:1 }}>{lv.perk}</div>
+                </div>
+                <div style={{ textAlign:"right", flexShrink:0 }}>
+                  {isCur&&<div style={{ fontFamily:C.mono, fontSize:8, fontWeight:900, color:lv.color }}>◀ NOW</div>}
+                  {isUnlocked&&!isCur&&<div style={{ fontSize:10, color:C.green }}>✓</div>}
+                  {!isUnlocked&&<div style={{ fontFamily:C.mono, fontSize:8, color:C.textFaint }}>{lv.minXP}XP</div>}
+                </div>
+              </Clip>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* 스캔 히스토리 */}
+      {state.scanHistory.length>0&&(<>
+        <SecLabel>◈ 스캔 히스토리</SecLabel>
+        <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:14 }}>
+          {state.scanHistory.slice(0,5).map((scan,i)=>(
+            <Clip key={scan.id} cut={6} style={{ border:`1px solid ${C.border}`, background:C.bgCard, padding:"8px 12px", display:"flex", alignItems:"center", gap:10 }}>
+              <div style={{ flex:1 }}><div style={{ fontSize:10, color:C.textMuted }}>#{state.scanHistory.length-i} — {formatDate(new Date(scan.date))}</div></div>
+              <div style={{ fontWeight:900, fontSize:13, color:scan.hp<50?C.red:scan.hp<70?C.yellow:C.green }}>{scan.hp} HP</div>
+            </Clip>
+          ))}
+        </div>
+      </>)}
+
+      {/* 설정 */}
+      <SecLabel>⚙ SYSTEM CONFIGURATION</SecLabel>
+      <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+        {settings.map((s,i)=>(
+          <motion.div key={s.id} initial={{ opacity:0, x:14 }} animate={{ opacity:1, x:0 }} transition={{ delay:i*0.07 }}>
+            <Clip cut={8} style={{ border:`1px solid ${C.border}`, background:C.bgCard }}>
+              <motion.button whileTap={{ scale:0.98 }} onClick={()=>toggle(s.id)}
+                style={{ width:"100%", display:"flex", alignItems:"center", gap:12, padding:"12px 14px", background:"none", border:"none", cursor:"pointer", textAlign:"left" }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:700, fontSize:14, color:C.textPrimary }}>{s.label}</div>
+                  <div style={{ fontSize:10, color:C.textMuted, marginTop:3 }}>{s.sub}</div>
+                </div>
+                <div style={{ width:44, height:23, flexShrink:0, position:"relative",
+                  border:`1px solid ${s.on?C.blue:C.border}`, background:s.on?"#001C2E":"transparent",
+                  clipPath:"polygon(0 0,calc(100% - 5px) 0,100% 5px,100% 100%,5px 100%,0 calc(100% - 5px))", transition:"border-color 0.2s,background 0.2s" }}>
+                  <motion.div animate={{ x:s.on?22:3 }} transition={{ type:"spring", stiffness:420, damping:30 }}
+                    style={{ position:"absolute", top:3, width:15, height:15, border:`1.5px solid ${s.on?C.blue:C.borderHi}`, background:s.on?C.blue:"transparent", transition:"background 0.2s" }}/>
+                </div>
+              </motion.button>
+            </Clip>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* 로그아웃 */}
+      <motion.button whileTap={{ scale:0.97 }} onClick={()=>{ SFX.tap(); haptic([8]); logout?.(); }}
+        style={{ width:"100%", padding:"12px 0", fontFamily:C.mono, fontWeight:700, fontSize:12, letterSpacing:"0.15em",
+          color:C.red, background:"transparent", border:`1px solid ${C.red}44`, cursor:"pointer", marginTop:10, marginBottom:6,
+          clipPath:"polygon(8px 0%,calc(100% - 8px) 0%,100% 8px,100% calc(100% - 8px),calc(100% - 8px) 100%,8px 100%,0% calc(100% - 8px),0% 8px)" }}>
+        ◀ LOGOUT // {user?.provider?.toUpperCase()||"—"}
+      </motion.button>
+
+      <div style={{ textAlign:"center", padding:"8px 0", fontSize:8, color:C.textFaint, letterSpacing:"0.15em" }}>
+        ARMORY TACTICAL v6.0 // XP SYSTEM
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
 // BOTTOM NAV
 // ══════════════════════════════════════════════════════════════════
 function ScanSVG({active}){const c=active?C.blue:C.textFaint;return(<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="1" y="1" width="7" height="7" stroke={c} strokeWidth="1.5"/><rect x="16" y="1" width="7" height="7" stroke={c} strokeWidth="1.5"/><rect x="1" y="16" width="7" height="7" stroke={c} strokeWidth="1.5"/><rect x="16" y="16" width="7" height="7" stroke={c} strokeWidth="1.5"/><circle cx="12" cy="12" r="3.5" stroke={c} strokeWidth="1.5"/><line x1="12" y1="1" x2="12" y2="8" stroke={c} strokeWidth="1"/><line x1="12" y1="16" x2="12" y2="23" stroke={c} strokeWidth="1"/><line x1="1" y1="12" x2="8" y2="12" stroke={c} strokeWidth="1"/><line x1="16" y1="12" x2="23" y2="12" stroke={c} strokeWidth="1"/></svg>);}
+  const C = useC();
 function LoadoutSVG({active}){const c=active?C.blue:C.textFaint;return(<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><polygon points="12,1 23,7 23,17 12,23 1,17 1,7" stroke={c} strokeWidth="1.5"/><polygon points="12,5 19,9 19,15 12,19 5,15 5,9" stroke={c} strokeWidth="1"/><rect x="9.5" y="9.5" width="5" height="5" stroke={c} strokeWidth="1" fill={active?`${C.blue}33`:"none"}/></svg>);}
+  const C = useC();
 function BaseSVG({active}){const c=active?C.blue:C.textFaint;return(<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="1" y="13" width="22" height="10" stroke={c} strokeWidth="1.5"/><polyline points="1,13 12,2 23,13" stroke={c} strokeWidth="1.5"/><rect x="9" y="16" width="6" height="7" stroke={c} strokeWidth="1"/><line x1="9" y1="19.5" x2="15" y2="19.5" stroke={c} strokeWidth="0.8"/></svg>);}
+  const C = useC();
+
+// SVG icons for new tabs
+function DashSVG({active}){const c=active?C.blue:C.textFaint;return(<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke={c} strokeWidth="1.5"/><path d="M12 12 L7 8" stroke={c} strokeWidth="1.5" strokeLinecap="round"/><line x1="12" y1="12" x2="15" y2="9" stroke={c} strokeWidth="1.2" strokeLinecap="round"/><circle cx="12" cy="12" r="1.5" fill={c}/><path d="M5 17 Q8.5 13 12 12 Q15.5 11 19 12" stroke={c} strokeWidth="1" fill="none" opacity="0.5"/></svg>);}
+  const C = useC();
+function ArsenalSVG({active}){const c=active?C.blue:C.textFaint;return(<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="8" width="14" height="9" rx="1" stroke={c} strokeWidth="1.5"/><path d="M3 10 Q10 6 17 10" stroke={c} strokeWidth="1.3" fill="none"/><rect x="17" y="10" width="4" height="5" rx="0.5" stroke={c} strokeWidth="1"/><line x1="6" y1="11.5" x2="6" y2="14.5" stroke={c} strokeWidth="1" opacity="0.7"/><line x1="9" y1="11.5" x2="9" y2="14.5" stroke={c} strokeWidth="1" opacity="0.7"/><line x1="12" y1="11.5" x2="12" y2="14.5" stroke={c} strokeWidth="1" opacity="0.7"/><rect x="6" y="17" width="5" height="2" rx="0.5" stroke={c} strokeWidth="1"/></svg>);}
+  const C = useC();
+function RankSVG({active}){const c=active?C.blue:C.textFaint;return(<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="9" y="2" width="6" height="20" rx="1" stroke={c} strokeWidth="1.5"/><rect x="2" y="8" width="6" height="14" rx="1" stroke={c} strokeWidth="1.5"/><rect x="16" y="5" width="6" height="17" rx="1" stroke={c} strokeWidth="1.5"/><line x1="10" y1="5" x2="14" y2="5" stroke={c} strokeWidth="0.8"/></svg>);}
+  const C = useC();
+function ProfileSVG({active}){const c=active?C.blue:C.textFaint;return(<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke={c} strokeWidth="1.5"/><path d="M4 20 C4 16 7.6 13 12 13 C16.4 13 20 16 20 20" stroke={c} strokeWidth="1.5" fill="none"/><polygon points="12,1 15,6 21,7 17,11 18,17 12,14 6,17 7,11 3,7 9,6" stroke={c} strokeWidth="0.7" fill="none" opacity="0.4"/></svg>);}
+  const C = useC();
 
 function BottomNav({ active, onSelect }) {
-  const tabs=[{id:"scan",label:"SCAN",Icon:ScanSVG},{id:"loadout",label:"LOADOUT",Icon:LoadoutSVG},{id:"base",label:"BASE",Icon:BaseSVG}];
+  const C = useC();
+  // SCAN은 중앙 고정, 나머지 4탭이 양옆에 2개씩
+  const leftTabs  = [{id:"dashboard",label:"DASH",   Icon:DashSVG   },{id:"arsenal",  label:"ARMS",   Icon:ArsenalSVG}];
+  const rightTabs = [{id:"ranking",  label:"RANK",   Icon:RankSVG   },{id:"profile",  label:"PROFILE",Icon:ProfileSVG}];
+
+  const NavBtn = ({id, label, Icon}) => {
+    const isActive = active===id;
+    return (
+      <motion.button whileTap={{ scale:0.88 }} onClick={()=>{ SFX.nav(); haptic([8]); onSelect(id); }}
+        style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", padding:"8px 0 9px",
+          background:"none", border:"none", cursor:"pointer", position:"relative" }}>
+        {isActive&&<motion.div layoutId="nl" style={{ position:"absolute", top:0, left:"15%", right:"15%", height:2, background:C.blue, boxShadow:`0 0 10px ${C.blue}` }} transition={{ type:"spring", stiffness:400, damping:34 }}/>}
+        <motion.div animate={{ scale:isActive?1.1:1 }} transition={{ type:"spring", stiffness:340 }}><Icon active={isActive}/></motion.div>
+        <motion.span animate={{ color:isActive?C.blue:C.textFaint }} style={{ fontFamily:C.mono, fontSize:7, letterSpacing:"0.1em", marginTop:3 }}>{label}</motion.span>
+      </motion.button>
+    );
+  };
+
+  const isScanActive = active==="scan";
   return (
-    <div style={{ flexShrink:0, position:"relative", borderTop:`1px solid ${C.border}`, background:"rgba(1,6,12,0.98)", backdropFilter:"blur(20px)", paddingBottom:"env(safe-area-inset-bottom,6px)", zIndex:20 }}>
+    <ThemeBottomNav active={active} onSelect={onSelect}/>
+  );
+}
+function ThemeBottomNav({ active, onSelect }) {
+  const { C:TC } = useTheme();
+  const leftTabs  = [{id:"dashboard",label:"DASH",   Icon:DashSVG   },{id:"arsenal",  label:"ARMS",   Icon:ArsenalSVG}];
+  const rightTabs = [{id:"ranking",  label:"RANK",   Icon:RankSVG   },{id:"profile",  label:"PROFILE",Icon:ProfileSVG}];
+  const NavBtn = ({id, label, Icon}) => {
+    const isActive = active===id;
+    return (
+      <motion.button whileTap={{ scale:0.88 }} onClick={()=>{ SFX.nav(); haptic([8]); onSelect(id); }}
+        style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", padding:"8px 0 9px",
+          background:"none", border:"none", cursor:"pointer", position:"relative" }}>
+        {isActive&&<motion.div layoutId="nl2" style={{ position:"absolute", top:0, left:"15%", right:"15%", height:2, background:C.blue, boxShadow:`0 0 10px ${C.blue}` }} transition={{ type:"spring", stiffness:400, damping:34 }}/>}
+        <motion.div animate={{ scale:isActive?1.1:1 }} transition={{ type:"spring", stiffness:340 }}><Icon active={isActive} C={TC}/></motion.div>
+        <motion.span animate={{ color:isActive?C.blue:C.textFaint }} style={{ fontFamily:C.mono, fontSize:7, letterSpacing:"0.1em", marginTop:3 }}>{label}</motion.span>
+      </motion.button>
+    );
+  };
+  const isScanActive = active==="scan";
+  return (
+    <motion.div animate={{ background:C.navBg, borderTopColor:C.border }}
+      style={{ flexShrink:0, position:"relative", borderTop:`1px solid ${C.border}`,
+        backdropFilter:"blur(20px)", paddingBottom:"env(safe-area-inset-bottom,6px)", zIndex:20 }}>
       <div style={{ position:"absolute", top:0, left:0, right:0, height:1, background:`linear-gradient(90deg,transparent,${C.blue}55,transparent)` }}/>
-      <div style={{ display:"flex" }}>
-        {tabs.map(({id,label,Icon})=>{
-          const isActive=active===id, isScan=id==="scan";
-          return (<motion.button key={id} whileTap={{ scale:0.88 }} onClick={()=>{ SFX.nav(); haptic([8]); onSelect(id); }}
-            style={{ flex:isScan?"1.4 1 0":"1 1 0", display:"flex", flexDirection:"column", alignItems:"center", padding:isScan?"5px 0 9px":"8px 0 9px", background:"none", border:"none", cursor:"pointer", position:"relative" }}>
-            {isActive&&<motion.div layoutId="nl" style={{ position:"absolute", top:0, left:"18%", right:"18%", height:2, background:C.blue, boxShadow:`0 0 10px ${C.blue}` }} transition={{ type:"spring", stiffness:400, damping:34 }}/>}
-            {isScan?(<div style={{ marginTop:-20, position:"relative" }}>
-              {isActive&&<motion.div animate={{ scale:[1,1.3,1], opacity:[0.5,0,0.5] }} transition={{ duration:2.4, repeat:Infinity }} style={{ position:"absolute", inset:-4, border:`1px solid ${C.blue}`, clipPath:"polygon(12% 0%,88% 0%,100% 12%,100% 88%,88% 100%,12% 100%,0% 88%,0% 12%)" }}/>}
-              <motion.div animate={{ boxShadow:isActive?`0 0 28px ${C.blue}77,0 0 8px ${C.blue}`:`0 0 10px ${C.blue}22` }}
-                style={{ width:66, height:66, display:"flex", alignItems:"center", justifyContent:"center", border:`2px solid ${isActive?C.blue:C.border}`, background:isActive?`linear-gradient(135deg,#001F32,#002D48)`:C.bgCard, clipPath:"polygon(12% 0%,88% 0%,100% 12%,100% 88%,88% 100%,12% 100%,0% 88%,0% 12%)" }}>
-                <ScanSVG active={isActive}/>
-              </motion.div>
-            </div>):(<motion.div animate={{ scale:isActive?1.1:1 }} transition={{ type:"spring", stiffness:340 }}><Icon active={isActive}/></motion.div>)}
-            <motion.span animate={{ color:isActive?C.blue:C.textFaint }} style={{ fontFamily:C.mono, fontSize:8, letterSpacing:"0.15em", marginTop:isScan?4:3 }}>{label}</motion.span>
-          </motion.button>);
-        })}
+      <div style={{ display:"flex", alignItems:"flex-end" }}>
+        {leftTabs.map(t=><NavBtn key={t.id} {...t}/>)}
+
+        {/* SCAN — 중앙 돌출 버튼 */}
+        <motion.button whileTap={{ scale:0.88 }} onClick={()=>{ SFX.nav(); haptic([8]); onSelect("scan"); }}
+          style={{ flex:"1.3 1 0", display:"flex", flexDirection:"column", alignItems:"center",
+            padding:"5px 0 9px", background:"none", border:"none", cursor:"pointer", position:"relative" }}>
+          {isScanActive&&<motion.div layoutId="nl" style={{ position:"absolute", top:0, left:"15%", right:"15%", height:2, background:C.blue, boxShadow:`0 0 10px ${C.blue}` }} transition={{ type:"spring", stiffness:400, damping:34 }}/>}
+          <div style={{ marginTop:-20, position:"relative" }}>
+            {isScanActive&&<motion.div animate={{ scale:[1,1.3,1], opacity:[0.5,0,0.5] }} transition={{ duration:2.4, repeat:Infinity }}
+              style={{ position:"absolute", inset:-4, border:`1px solid ${C.blue}`, clipPath:"polygon(12% 0%,88% 0%,100% 12%,100% 88%,88% 100%,12% 100%,0% 88%,0% 12%)" }}/>}
+            <motion.div animate={{ boxShadow:isScanActive?`0 0 28px ${C.blue}77,0 0 8px ${C.blue}`:`0 0 10px ${C.blue}22` }}
+              style={{ width:60, height:60, display:"flex", alignItems:"center", justifyContent:"center",
+                border:`2px solid ${isScanActive?C.blue:C.border}`,
+                background:isScanActive?`linear-gradient(135deg,#001F32,#002D48)`:C.bgCard,
+                clipPath:"polygon(12% 0%,88% 0%,100% 12%,100% 88%,88% 100%,12% 100%,0% 88%,0% 12%)" }}>
+              <ScanSVG active={isScanActive}/>
+            </motion.div>
+          </div>
+          <motion.span animate={{ color:isScanActive?C.blue:C.textFaint }} style={{ fontFamily:C.mono, fontSize:7, letterSpacing:"0.1em", marginTop:4 }}>SCAN</motion.span>
+        </motion.button>
+
+        {rightTabs.map(t=><NavBtn key={t.id} {...t}/>)}
       </div>
     </div>
   );
@@ -2023,14 +2792,21 @@ function BottomNav({ active, onSelect }) {
 // ══════════════════════════════════════════════════════════════════
 // ROOT
 // ══════════════════════════════════════════════════════════════════
-const TAB_ORDER=["scan","loadout","base"];
-const TAB_PAGES={ scan:ScanTab, loadout:LoadoutTab, base:BaseTab };
+const TAB_ORDER=["dashboard","arsenal","scan","ranking","profile"];
+const TAB_PAGES={
+  dashboard: DashboardTab,
+  arsenal:   ArsenalTab,
+  scan:      ScanTab,
+  ranking:   RankingTab,
+  profile:   ProfileTab,
+};
 
 // ══════════════════════════════════════════════════════════════════
 // INNER APP (requires auth)
 // ══════════════════════════════════════════════════════════════════
 function ArmoryInner() {
   const { user, logout } = useAuth();
+  const { C: TC, theme, toggleTheme } = useTheme();
   const [state, dispatch] = useReducer(reducer, INIT_STATE);
   const [tab, setTab] = useState("scan");
   const [prevTab, setPrevTab] = useState("scan");
@@ -2038,19 +2814,31 @@ function ArmoryInner() {
   const [showCart, setShowCart] = useState(false);
 
   const handleSelect=(id)=>{ setPrevTab(tab); setTab(id); };
-  const dir=TAB_ORDER.indexOf(tab)>TAB_ORDER.indexOf(prevTab)?1:-1;
-  const Page=TAB_PAGES[tab];
+  const tIdx = TAB_ORDER.indexOf(tab), pIdx = TAB_ORDER.indexOf(prevTab);
+  const dir = tIdx > pIdx ? 1 : tIdx < pIdx ? -1 : 1;
+  const Page=TAB_PAGES[tab]||ScanTab;
+
+  const { theme, C:TC, toggleTheme } = useTheme();
 
   return (
-    <AppCtx.Provider value={{ state, dispatch, user, logout }}>
-      <div style={{ height:"100dvh", maxWidth:430, margin:"0 auto", background:C.bg,
-        backgroundImage:`radial-gradient(ellipse at 22% 0%,#001B2E 0%,transparent 55%),radial-gradient(ellipse at 85% 100%,#000E1A 0%,transparent 40%)`,
-        fontFamily:C.mono, display:"flex", flexDirection:"column", overflow:"hidden", position:"relative" }}>
+    <AppCtx.Provider value={{ state, dispatch, user, logout, theme, C:TC, toggleTheme }}>
+      <motion.div
+        animate={{ background: C.bg }}
+        transition={{ duration:0.35 }}
+        style={{ height:"100dvh", maxWidth:430, margin:"0 auto",
+          backgroundImage: theme==="dark"
+            ? `radial-gradient(ellipse at 22% 0%,#001B2E 0%,transparent 55%),radial-gradient(ellipse at 85% 100%,#000E1A 0%,transparent 40%)`
+            : `radial-gradient(ellipse at 22% 0%,#D8E8F4 0%,transparent 55%),radial-gradient(ellipse at 85% 100%,#EBF2F8 0%,transparent 40%)`,
+          fontFamily:C.mono, display:"flex", flexDirection:"column", overflow:"hidden", position:"relative" }}>
 
-        <div style={{ position:"absolute", inset:0, pointerEvents:"none", backgroundImage:`linear-gradient(${C.blue}05 1px,transparent 1px),linear-gradient(90deg,${C.blue}05 1px,transparent 1px)`, backgroundSize:"30px 30px" }}/>
-        <div style={{ position:"absolute", inset:0, pointerEvents:"none", zIndex:50, overflow:"hidden", opacity:0.02 }}>
-          <motion.div animate={{ top:["0%","100%"] }} transition={{ duration:6, repeat:Infinity, ease:"linear" }} style={{ position:"absolute", left:0, right:0, height:2, background:"#fff" }}/>
-        </div>
+        <div style={{ position:"absolute", inset:0, pointerEvents:"none",
+          backgroundImage:`linear-gradient(${C.gridColor} 1px,transparent 1px),linear-gradient(90deg,${C.gridColor} 1px,transparent 1px)`,
+          backgroundSize:"30px 30px" }}/>
+        {theme === "dark" && (
+          <div style={{ position:"absolute", inset:0, pointerEvents:"none", zIndex:50, overflow:"hidden", opacity:0.02 }}>
+            <motion.div animate={{ top:["0%","100%"] }} transition={{ duration:6, repeat:Infinity, ease:"linear" }} style={{ position:"absolute", left:0, right:0, height:2, background:"#fff" }}/>
+          </div>
+        )}
 
         {/* Background systems */}
         <DateWatcher/>
@@ -2097,7 +2885,7 @@ function ArmoryInner() {
         <AnimatePresence>
           {state.levelUpQueue.length>0&&<LevelUpOverlay key="lvup"/>}
         </AnimatePresence>
-      </div>
+      </motion.div>
     </AppCtx.Provider>
   );
 }
@@ -2107,20 +2895,23 @@ function ArmoryInner() {
 // ══════════════════════════════════════════════════════════════════
 export default function ArmoryApp() {
   return (
-    <AuthProvider>
-      <AuthGate />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AuthGate />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 
 function AuthGate() {
+  const C = useC();
   const { user } = useAuth();
   return (
-    <div style={{
-      height:"100dvh", maxWidth:430, margin:"0 auto",
-      background:C.bg, position:"relative", overflow:"hidden",
-      fontFamily:C.mono,
-    }}>
+    <motion.div animate={{ background:C.bg }} transition={{ duration:0.35 }}
+      style={{
+        height:"100dvh", maxWidth:430, margin:"0 auto",
+        position:"relative", overflow:"hidden", fontFamily:C.mono,
+      }}>
       <AnimatePresence mode="wait">
         {!user
           ? <motion.div key="login" style={{ position:"absolute", inset:0 }}

@@ -1,3 +1,8 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  experimental: {
+    esmExternals: false,
+  },
+};
+
 module.exports = nextConfig;
