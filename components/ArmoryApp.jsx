@@ -1212,7 +1212,7 @@ function ToastLayer() {
           </motion.div>
         ))}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 }
 
@@ -2926,6 +2926,6 @@ function AuthGate() {
             </motion.div>
         }
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 }
