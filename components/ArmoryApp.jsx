@@ -2782,6 +2782,7 @@ function ThemeBottomNav({ active, onSelect }) {
           </div>
           <motion.span animate={{ color:isScanActive?C.blue:C.textFaint }} style={{ fontFamily:C.mono, fontSize:7, letterSpacing:"0.1em", marginTop:4 }}>SCAN</motion.span>
         </motion.button>
+        </div>
 
         {rightTabs.map(t=><NavBtn key={t.id} {...t}/>)}
       </div>
