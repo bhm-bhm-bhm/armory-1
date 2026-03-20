@@ -1212,7 +1212,7 @@ function ToastLayer() {
           </motion.div>
         ))}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }
 
@@ -2717,76 +2717,44 @@ function ProfileSVG({active}){const c=active?C.blue:C.textFaint;return(<svg widt
 
 function BottomNav({ active, onSelect }) {
   const C = useC();
-  // SCAN은 중앙 고정, 나머지 4탭이 양옆에 2개씩
-  const leftTabs  = [{id:"dashboard",label:"DASH",   Icon:DashSVG   },{id:"arsenal",  label:"ARMS",   Icon:ArsenalSVG}];
-  const rightTabs = [{id:"ranking",  label:"RANK",   Icon:RankSVG   },{id:"profile",  label:"PROFILE",Icon:ProfileSVG}];
+  const leftTabs  = [{id:"dashboard",label:"DASH",Icon:DashSVG},{id:"arsenal",label:"ARMS",Icon:ArsenalSVG}];
+  const rightTabs = [{id:"ranking",label:"RANK",Icon:RankSVG},{id:"profile",label:"PROFILE",Icon:ProfileSVG}];
+  const isScanActive = active==="scan";
 
   const NavBtn = ({id, label, Icon}) => {
     const isActive = active===id;
     return (
       <motion.button whileTap={{ scale:0.88 }} onClick={()=>{ SFX.nav(); haptic([8]); onSelect(id); }}
-        style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", padding:"8px 0 9px",
-          background:"none", border:"none", cursor:"pointer", position:"relative" }}>
-        {isActive&&<motion.div layoutId="nl" style={{ position:"absolute", top:0, left:"15%", right:"15%", height:2, background:C.blue, boxShadow:`0 0 10px ${C.blue}` }} transition={{ type:"spring", stiffness:400, damping:34 }}/>}
+        style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", padding:"8px 0 9px", background:"none", border:"none", cursor:"pointer", position:"relative" }}>
+        {isActive&&<motion.div layoutId="navline" style={{ position:"absolute", top:0, left:"15%", right:"15%", height:2, background:C.blue, boxShadow:`0 0 10px ${C.blue}` }} transition={{ type:"spring", stiffness:400, damping:34 }}/>}
         <motion.div animate={{ scale:isActive?1.1:1 }} transition={{ type:"spring", stiffness:340 }}><Icon active={isActive}/></motion.div>
         <motion.span animate={{ color:isActive?C.blue:C.textFaint }} style={{ fontFamily:C.mono, fontSize:7, letterSpacing:"0.1em", marginTop:3 }}>{label}</motion.span>
       </motion.button>
     );
   };
 
-  const isScanActive = active==="scan";
-  return (
-    <ThemeBottomNav active={active} onSelect={onSelect}/>
-  );
-}
-function ThemeBottomNav({ active, onSelect }) {
-  const { C:TC } = useTheme();
-  const leftTabs  = [{id:"dashboard",label:"DASH",   Icon:DashSVG   },{id:"arsenal",  label:"ARMS",   Icon:ArsenalSVG}];
-  const rightTabs = [{id:"ranking",  label:"RANK",   Icon:RankSVG   },{id:"profile",  label:"PROFILE",Icon:ProfileSVG}];
-  const NavBtn = ({id, label, Icon}) => {
-    const isActive = active===id;
-    return (
-      <motion.button whileTap={{ scale:0.88 }} onClick={()=>{ SFX.nav(); haptic([8]); onSelect(id); }}
-        style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", padding:"8px 0 9px",
-          background:"none", border:"none", cursor:"pointer", position:"relative" }}>
-        {isActive&&<motion.div layoutId="nl2" style={{ position:"absolute", top:0, left:"15%", right:"15%", height:2, background:C.blue, boxShadow:`0 0 10px ${C.blue}` }} transition={{ type:"spring", stiffness:400, damping:34 }}/>}
-        <motion.div animate={{ scale:isActive?1.1:1 }} transition={{ type:"spring", stiffness:340 }}><Icon active={isActive} C={TC}/></motion.div>
-        <motion.span animate={{ color:isActive?C.blue:C.textFaint }} style={{ fontFamily:C.mono, fontSize:7, letterSpacing:"0.1em", marginTop:3 }}>{label}</motion.span>
-      </motion.button>
-    );
-  };
-  const isScanActive = active==="scan";
   return (
     <motion.div animate={{ background:C.navBg, borderTopColor:C.border }}
-      style={{ flexShrink:0, position:"relative", borderTop:`1px solid ${C.border}`,
-        backdropFilter:"blur(20px)", paddingBottom:"env(safe-area-inset-bottom,6px)", zIndex:20 }}>
+      style={{ flexShrink:0, position:"relative", borderTop:`1px solid ${C.border}`, backdropFilter:"blur(20px)", paddingBottom:"env(safe-area-inset-bottom,6px)", zIndex:20 }}>
       <div style={{ position:"absolute", top:0, left:0, right:0, height:1, background:`linear-gradient(90deg,transparent,${C.blue}55,transparent)` }}/>
       <div style={{ display:"flex", alignItems:"flex-end" }}>
         {leftTabs.map(t=><NavBtn key={t.id} {...t}/>)}
-
-        {/* SCAN — 중앙 돌출 버튼 */}
         <motion.button whileTap={{ scale:0.88 }} onClick={()=>{ SFX.nav(); haptic([8]); onSelect("scan"); }}
-          style={{ flex:"1.3 1 0", display:"flex", flexDirection:"column", alignItems:"center",
-            padding:"5px 0 9px", background:"none", border:"none", cursor:"pointer", position:"relative" }}>
-          {isScanActive&&<motion.div layoutId="nl" style={{ position:"absolute", top:0, left:"15%", right:"15%", height:2, background:C.blue, boxShadow:`0 0 10px ${C.blue}` }} transition={{ type:"spring", stiffness:400, damping:34 }}/>}
+          style={{ flex:"1.3 1 0", display:"flex", flexDirection:"column", alignItems:"center", padding:"5px 0 9px", background:"none", border:"none", cursor:"pointer", position:"relative" }}>
+          {isScanActive&&<motion.div layoutId="navline" style={{ position:"absolute", top:0, left:"15%", right:"15%", height:2, background:C.blue, boxShadow:`0 0 10px ${C.blue}` }} transition={{ type:"spring", stiffness:400, damping:34 }}/>}
           <div style={{ marginTop:-20, position:"relative" }}>
             {isScanActive&&<motion.div animate={{ scale:[1,1.3,1], opacity:[0.5,0,0.5] }} transition={{ duration:2.4, repeat:Infinity }}
               style={{ position:"absolute", inset:-4, border:`1px solid ${C.blue}`, clipPath:"polygon(12% 0%,88% 0%,100% 12%,100% 88%,88% 100%,12% 100%,0% 88%,0% 12%)" }}/>}
             <motion.div animate={{ boxShadow:isScanActive?`0 0 28px ${C.blue}77,0 0 8px ${C.blue}`:`0 0 10px ${C.blue}22` }}
-              style={{ width:60, height:60, display:"flex", alignItems:"center", justifyContent:"center",
-                border:`2px solid ${isScanActive?C.blue:C.border}`,
-                background:isScanActive?`linear-gradient(135deg,#001F32,#002D48)`:C.bgCard,
-                clipPath:"polygon(12% 0%,88% 0%,100% 12%,100% 88%,88% 100%,12% 100%,0% 88%,0% 12%)" }}>
+              style={{ width:60, height:60, display:"flex", alignItems:"center", justifyContent:"center", border:`2px solid ${isScanActive?C.blue:C.border}`, background:isScanActive?`linear-gradient(135deg,#001F32,#002D48)`:C.bgCard, clipPath:"polygon(12% 0%,88% 0%,100% 12%,100% 88%,88% 100%,12% 100%,0% 88%,0% 12%)" }}>
               <ScanSVG active={isScanActive}/>
             </motion.div>
           </div>
           <motion.span animate={{ color:isScanActive?C.blue:C.textFaint }} style={{ fontFamily:C.mono, fontSize:7, letterSpacing:"0.1em", marginTop:4 }}>SCAN</motion.span>
         </motion.button>
-        </div>
-
         {rightTabs.map(t=><NavBtn key={t.id} {...t}/>)}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
